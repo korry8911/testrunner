@@ -3,7 +3,7 @@ from lib.membase.api.exception import CBQError
 from lib.membase.api.rest_client import RestConnection
 from lib.remote.remote_util import RemoteMachineShellConnection
 from pytests.basetestcase import BaseTestCase
-from tuq_sanity import ExplainPlanHelper
+from tuq import ExplainPlanHelper
 from tuq import QueryTests
 import time
 import sys
@@ -94,7 +94,6 @@ class AscDescTests(QueryTests):
                                             "post_queries": [], "asserts": [assert_9], "cleanups": []}
 
         self.query_runner(test_dict)
-
 
     # This test test various combination of fields in an array index.
     def test_asc_desc_array_index(self):

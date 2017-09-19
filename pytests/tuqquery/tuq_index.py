@@ -435,8 +435,6 @@ class QueriesViewsTests(QueryTests):
                     self.query = "DROP INDEX %s.%s USING %s" % ("default", idx, self.index_type)
                     self.run_cbq_query()
 
-
-
     def test_notin_notwithin(self):
       created_indexes = []
       try:
@@ -503,7 +501,6 @@ class QueriesViewsTests(QueryTests):
             finally:
                 self.query = "DROP INDEX %s.%s USING %s" % (bucket.name, index_name, self.index_type)
                 self.run_cbq_query()
-
 
     def test_explain_index_attr(self):
         for bucket in self.buckets:
@@ -1134,95 +1131,7 @@ class QueriesViewsTests(QueryTests):
                     except:
                         pass
 
-    def run_intersect_scan_query(self, query_method):
-        indexes = []
-        query = None
-        index_name_prefix = "inter_index_" + str(uuid.uuid4())[:4]
-        index_fields = self.input.param("index_field", '').split(';')
-        try:
-            for bucket in self.buckets:
-                for field in index_fields:
-                    index_name = '%s%s' % (index_name_prefix, field.split('.')[0].split('[')[0])
-                    query = "CREATE INDEX %s ON %s(%s) USING %s" % (
-                    index_name, bucket.name, ','.join(field.split(';')), self.index_type)
-                    self.run_cbq_query(query=query)
-                    self._wait_for_index_online(bucket, index_name)
-                    indexes.append(index_name)
-                fn = getattr(self, query_method)
-                query = fn()
-        finally:
-            return indexes, query
-
-    def run_intersect_scan_explain_query(self, indexes_names, query_temp):
-        for bucket in self.buckets:
-            if (query_temp.find('%s') > 0):
-                query_temp = query_temp % bucket.name
-            query = 'EXPLAIN %s' % (query_temp)
-            res = self.run_cbq_query(query=query)
-            plan = ExplainPlanHelper(res)
-            self.log.info('-'*100)
-            if (query.find("CREATE INDEX") < 0):
-                result = plan["~children"][0]["~children"][0] if "~children" in plan["~children"][0] \
-                        else plan["~children"][0]
-                if not(result['scans'][0]['#operator']=='DistinctScan'):
-                    if not (result["#operator"] == 'UnionScan'):
-                        self.assertTrue(result["#operator"] == 'IntersectScan',
-                                        "Index should be intersect scan and is %s" % (plan))
-                    # actual_indexes = []
-                    # for scan in result['scans']:
-                    #     print scan
-                    #     if (scan['#operator'] == 'IndexScan'):
-                    #         actual_indexes.append([result['scans'][0]['index']])
-                    #
-                    #     elif (scan['#operator'] == 'DistinctScan'):
-                    #         actual_indexes.append([result['scans'][0]['scan']['index']])
-                    #     else:
-                    #          actual_indexes.append(scan['index'])
-                    if result["#operator"] == 'UnionScan':
-                        actual_indexes = [scan['index'] if scan['#operator'] == 'IndexScan' else scan['scan']['index'] if scan['#operator'] == 'DistinctScan' else scan['index']
-                                          for results in result['scans'] for scan in results['scans']]
-                    else:
-                        actual_indexes = [scan['index'] if scan['#operator'] == 'IndexScan' else scan['scan']['index'] if scan['#operator'] == 'DistinctScan' else scan['index']
-                                for scan in result['scans']]
-                    actual_indexes = [x.encode('UTF8') for x in actual_indexes]
-                    self.log.info('actual indexes "{0}"'.format(actual_indexes))
-                    self.log.info('compared against "{0}"'.format(indexes_names))
-                    self.assertTrue(set(actual_indexes) == set(indexes_names),"Indexes should be %s, but are: %s" % (indexes_names, actual_indexes))
-            else:
-                result = plan
-                self.assertTrue(result['#operator'] == 'CreateIndex',
-                                    "Operator is not create index and is %s" % (result))
-            self.log.info('-'*100)
-
-    def _delete_indexes(self, indexes):
-        count = 0
-        for bucket in self.buckets:
-                query = "DROP INDEX %s.%s USING %s" % (bucket.name, indexes[count], self.index_type)
-                count =count+1
-                try:
-                   self.run_cbq_query(query=query)
-                except:
-                   pass
-
-    def _verify_view_is_present(self, view_name, bucket):
-        if self.primary_indx_type.lower() == 'gsi':
-            return
-        ddoc, _ = RestConnection(self.master).get_ddoc(bucket.name, "ddl_%s" % view_name)
-        self.assertTrue(view_name in ddoc["views"], "View %s wasn't created" % view_name)
-
-    def _is_index_in_list(self, bucket, index_name):
-        query = "SELECT * FROM system:indexes"
-        res = self.run_cbq_query(query)
-        for item in res['results']:
-            if 'keyspace_id' not in item['indexes']:
-                self.log.error(item)
-                continue
-            if item['indexes']['keyspace_id'] == bucket.name and item['indexes']['name'] == index_name:
-                return True
-        return False
-
 class QueriesJoinViewsTests(JoinTests):
-
 
     def setUp(self):
         super(QueriesJoinViewsTests, self).setUp()

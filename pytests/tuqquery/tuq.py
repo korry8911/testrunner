@@ -15,6 +15,24 @@ from membase.api.rest_client import RestConnection
 # from sdk_client import SDKClient
 from couchbase_helper.tuq_generators import TuqGenerators
 
+JOIN_INNER = "INNER"
+JOIN_LEFT = "LEFT"
+JOIN_RIGHT = "RIGHT"
+
+def ExplainPlanHelper(res):
+    try:
+        rv = res["results"][0]["plan"]
+    except:
+        rv = res["results"][0]
+    return rv
+
+def PreparePlanHelper(res):
+    try:
+        rv = res["results"][0]["plan"]
+    except:
+        rv = res["results"][0]["operator"]
+    return rv
+
 class QueryTests(BaseTestCase):
     def setUp(self):
         if not self._testMethodName == 'suite_setUp' and \
@@ -2303,3 +2321,595 @@ class QueryTests(BaseTestCase):
                     if cbq_engine.find('grep') == -1:
                         pid = [item for item in cbq_engine.split(' ') if item][1]
                         self.shell.execute_command("kill -9 %s" % pid)
+
+##############################################################################################
+#
+#   tuq_xdcr.py helpers
+##############################################################################################
+
+    def _override_clusters_structure(self):
+        UpgradeTests._override_clusters_structure(self)
+
+    def _create_buckets(self, nodes):
+        UpgradeTests._create_buckets(self, nodes)
+
+    def _setup_topology_chain(self):
+        UpgradeTests._setup_topology_chain(self)
+
+    def _set_toplogy_star(self):
+        UpgradeTests._set_toplogy_star(self)
+
+    def _join_clusters(self, src_cluster_name, src_master, dest_cluster_name, dest_master):
+        UpgradeTests._join_clusters(self, src_cluster_name, src_master,
+                                    dest_cluster_name, dest_master)
+
+    def _replicate_clusters(self, src_master, dest_cluster_name, buckets):
+        UpgradeTests._replicate_clusters(self, src_master, dest_cluster_name, buckets)
+
+    def _get_bucket(self, bucket_name, server):
+        return UpgradeTests._get_bucket(self, bucket_name, server)
+
+##############################################################################################
+#
+#   tuq_views_ops.py helpers
+##############################################################################################
+
+    def _compare_view_and_tool_result(self, view_result, tool_result, check_values=True):
+        self.log.info("Comparing result ...")
+        formated_tool_res = [{"key" : [doc["join_yr"], doc["join_mo"]],
+                              "value" : doc["name"]} for doc in tool_result]
+        formated_view_res = [{"key" : row["key"],
+                              "value": row["value"]} for row in view_result]
+
+        self.assertEqual(len(formated_tool_res), len(formated_view_res),
+                         "Query results are not equal. Tool %s, view %s" %(
+                             len(formated_tool_res), len(formated_view_res)))
+        self.log.info("Length is equal")
+        self.assertEqual([row["key"] for row in formated_tool_res],
+                         [row["key"] for row in formated_view_res],
+                         "Query results sorting are not equal./n Actual %s, Expected %s" %(
+                             formated_tool_res[:100],formated_view_res[:100]))
+        self.log.info("Sorting is equal")
+        if check_values:
+            formated_tool_res = sorted(formated_tool_res, key=lambda doc: (doc['key'],
+                                                                           doc['value']))
+            formated_view_res = sorted(formated_view_res, key=lambda doc: (doc['key'],
+                                                                           doc['value']))
+            self.assertTrue(formated_tool_res == formated_view_res,
+                            "Query results sorting are not equal. View but not tool has [%s]" %(
+                                [r for r in view_result if r in formated_tool_res]))
+            self.log.info("Items are equal")
+
+##############################################################################################
+#
+#   tuq_tutorial.py helpers
+##############################################################################################
+
+    def _create_headers(self):
+        authorization = ""
+        return {'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': 'Basic %s' % authorization,
+                'Accept': '*/*'}
+
+    def _http_request(self, api, method='GET', params='', headers=None, timeout=120):
+        if not headers:
+            headers = self._create_headers()
+        end_time = time.time() + timeout
+        while True:
+            try:
+                response, content = httplib2.Http(timeout=timeout).request(api, method, params, headers)
+                if response['status'] in ['200', '201', '202']:
+                    return True, content, response
+                else:
+                    try:
+                        json_parsed = json.loads(content)
+                    except ValueError as e:
+                        json_parsed = {}
+                        json_parsed["error"] = "status: {0}, content: {1}".format(response['status'], content)
+                    reason = "unknown"
+                    if "error" in json_parsed:
+                        reason = json_parsed["error"]
+                    self.log.error('{0} error {1} reason: {2} {3}'.format(api, response['status'], reason, content.rstrip('\n')))
+                    return False, content, response
+            except socket.error as e:
+                self.log.error("socket error while connecting to {0} error {1} ".format(api, e))
+                if time.time() > end_time:
+                    raise Exception("nothing")
+            time.sleep(3)
+
+##############################################################################################
+#
+#   tuq_nulls.py helpers
+##############################################################################################
+
+    def generate_docs(self, name="tuq", start=0, end=0):
+        if not end:
+            end = self.num_items
+        generators = []
+        index = end/3
+        template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P0":{1}, "P1":{2}, "P2":{3}}},'
+        template += '"story_point" : {4},"jira_tickets": {5}}}'
+        names = [str(i) for i in xrange(0, index)]
+        rates = xrange(0, index)
+        points = [[1,2,3],]
+        jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
+                        '{"Number": 2, "project": "mb", "description": "test"}]',]
+        generators.append(DocumentGenerator(name, template,
+                                            names, rates, rates, rates, points, jira_tickets,
+                                            start=start, end=index))
+        template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P0": null, "P1":null, "P2":null}},'
+        template += '"story_point" : [1,2,null],"jira_tickets": {1}}}'
+        jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
+                        '{"Number": 2, "project": "mb", "description": null}]',]
+        names = [str(i) for i in xrange(index, index + index)]
+        generators.append(DocumentGenerator(name, template,
+                                            names, jira_tickets,
+                                            start=index, end=index + index))
+        template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P4": 2}},'
+        template += '"story_point" : [null,null],"jira_tickets": {1}}}'
+        names = [str(i) for i in xrange(index + index, end)]
+        jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
+                        '{"Number": 2, "project": "mb"}]',]
+        generators.append(DocumentGenerator(name, template,
+                                            names, jira_tickets, start=index + index, end=end))
+        return generators
+
+##############################################################################################
+#
+#   tuq_json_non_docs.py helpers
+##############################################################################################
+
+    def generate_docs(self, values_type, name="tuq", start=0, end=0):
+        if end==0:
+            end = self.num_items
+        if values_type == 'string':
+            values = ['Engineer', 'Sales', 'Support']
+        elif values_type == 'int':
+            values = [100, 200, 300, 400, 500]
+        elif values_type == 'array':
+            values = [[10, 20], [20, 30], [30, 40]]
+        else:
+            return []
+        generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
+        return generators
+
+##############################################################################################
+#
+#   tuq_join.py helpers
+##############################################################################################
+
+    def _get_for_sort(self, doc):
+        if not 'emp' in doc:
+            return ''
+        if 'name' in doc['emp']:
+            return doc['emp']['name'], doc['emp']['join_yr'], \
+                   doc['emp']['join_mo'], doc['emp']['job_title']
+        else:
+            return doc['emp']['task_name']
+
+    def _delete_ids(self, result):
+        for item in result:
+            if 'emp' in item:
+                del item['emp']['_id']
+            if 'tasks' in item:
+                for task in item['tasks']:
+                    if task and '_id' in task:
+                        del task['_id']
+
+    def generate_docs(self, docs_per_day, start=0):
+        generators = []
+        types = ['Engineer', 'Sales', 'Support']
+        join_yr = [2010, 2011]
+        join_mo = xrange(1, 12 + 1)
+        join_day = xrange(1, 28 + 1)
+        template = '{{ "name":"{0}", "join_yr":{1}, "join_mo":{2}, "join_day":{3},'
+        template += ' "job_title":"{4}", "tasks_ids":{5}}}'
+        for info in types:
+            for year in join_yr:
+                for month in join_mo:
+                    for day in join_day:
+                        name = ["employee-%s" % (str(day))]
+                        tasks_ids = ["test_task-%s" % day, "test_task-%s" % (day + 1)]
+                        generators.append(DocumentGenerator("query-test-%s-%s-%s-%s" % (info, year, month, day),
+                                                            template,
+                                                            name, [year], [month], [day],
+                                                            [info], [tasks_ids],
+                                                            start=start, end=docs_per_day))
+        return generators
+
+    def generate_docs_tasks(self):
+        generators = []
+        start, end = 0, (28 + 1)
+        template = '{{ "task_name":"{0}", "project": "{1}"}}'
+        generators.append(DocumentGenerator("test_task", template,
+                                            ["test_task-%s" % i for i in xrange(0,10)],
+                                            ["CB"],
+                                            start=start, end=10))
+        generators.append(DocumentGenerator("test_task", template,
+                                            ["test_task-%s" % i for i in xrange(10,20)],
+                                            ["MB"],
+                                            start=10, end=20))
+        generators.append(DocumentGenerator("test_task", template,
+                                            ["test_task-%s" % i for i in xrange(20,end)],
+                                            ["IT"],
+                                            start=20, end=end))
+        return generators
+
+    def _generate_full_joined_docs_list(self, join_type=JOIN_INNER,
+                                        particular_key=None):
+        joined_list = []
+        all_docs_list = self.generate_full_docs_list(self.gens_load)
+        if join_type.upper() == JOIN_INNER:
+            for item in all_docs_list:
+                keys = item["tasks_ids"]
+                if particular_key is not None:
+                    keys=[item["tasks_ids"][particular_key]]
+                tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
+                for tasks_item in tasks_items:
+                    item_to_add = copy.deepcopy(item)
+                    item_to_add.update(tasks_item)
+                    joined_list.append(item_to_add)
+        elif join_type.upper() == JOIN_LEFT:
+            for item in all_docs_list:
+                keys = item["tasks_ids"]
+                if particular_key is not None:
+                    keys=[item["tasks_ids"][particular_key]]
+                tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
+                for key in keys:
+                    item_to_add = copy.deepcopy(item)
+                    if key in [doc["_id"] for doc in tasks_items]:
+                        item_to_add.update([doc for doc in tasks_items if key == doc['_id']][0])
+                        joined_list.append(item_to_add)
+            joined_list.extend([{}] * self.gens_tasks[-1].end)
+        elif join_type.upper() == JOIN_RIGHT:
+            raise Exception("RIGHT JOIN doen't exists in corrunt implementation")
+        else:
+            raise Exception("Unknown type of join")
+        return joined_list
+
+    def _generate_full_nested_docs_list(self, join_type=JOIN_INNER,
+                                        particular_key=None):
+        nested_list = []
+        all_docs_list = self.generate_full_docs_list(self.gens_load)
+        if join_type.upper() == JOIN_INNER:
+            for item in all_docs_list:
+                keys = item["tasks_ids"]
+                if particular_key is not None:
+                    keys=[item["tasks_ids"][particular_key]]
+                tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
+                if tasks_items:
+                    nested_list.append({"items_nested" : tasks_items,
+                                        "item" : item})
+        elif join_type.upper() == JOIN_LEFT:
+            for item in all_docs_list:
+                keys = item["tasks_ids"]
+                if particular_key is not None:
+                    keys=[item["tasks_ids"][particular_key]]
+                tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
+                if tasks_items:
+                    nested_list.append({"items_nested" : tasks_items,
+                                        "item" : item})
+            tasks_doc_list = self.generate_full_docs_list(self.gens_tasks)
+            for item in tasks_doc_list:
+                nested_list.append({"item" : item})
+        elif join_type.upper() == JOIN_RIGHT:
+            raise Exception("RIGHT JOIN doen't exists in corrunt implementation")
+        else:
+            raise Exception("Unknown type of join")
+        return nested_list
+
+##############################################################################################
+#
+#   tuq_index.py helpers
+##############################################################################################
+
+    def run_intersect_scan_query(self, query_method):
+        indexes = []
+        query = None
+        index_name_prefix = "inter_index_" + str(uuid.uuid4())[:4]
+        index_fields = self.input.param("index_field", '').split(';')
+        try:
+            for bucket in self.buckets:
+                for field in index_fields:
+                    index_name = '%s%s' % (index_name_prefix, field.split('.')[0].split('[')[0])
+                    query = "CREATE INDEX %s ON %s(%s) USING %s" % (
+                        index_name, bucket.name, ','.join(field.split(';')), self.index_type)
+                    self.run_cbq_query(query=query)
+                    self._wait_for_index_online(bucket, index_name)
+                    indexes.append(index_name)
+                fn = getattr(self, query_method)
+                query = fn()
+        finally:
+            return indexes, query
+
+    def run_intersect_scan_explain_query(self, indexes_names, query_temp):
+        for bucket in self.buckets:
+            if (query_temp.find('%s') > 0):
+                query_temp = query_temp % bucket.name
+            query = 'EXPLAIN %s' % (query_temp)
+            res = self.run_cbq_query(query=query)
+            plan = ExplainPlanHelper(res)
+            self.log.info('-'*100)
+            if (query.find("CREATE INDEX") < 0):
+                result = plan["~children"][0]["~children"][0] if "~children" in plan["~children"][0] \
+                    else plan["~children"][0]
+                if not(result['scans'][0]['#operator']=='DistinctScan'):
+                    if not (result["#operator"] == 'UnionScan'):
+                        self.assertTrue(result["#operator"] == 'IntersectScan',
+                                        "Index should be intersect scan and is %s" % (plan))
+                    # actual_indexes = []
+                    # for scan in result['scans']:
+                    #     print scan
+                    #     if (scan['#operator'] == 'IndexScan'):
+                    #         actual_indexes.append([result['scans'][0]['index']])
+                    #
+                    #     elif (scan['#operator'] == 'DistinctScan'):
+                    #         actual_indexes.append([result['scans'][0]['scan']['index']])
+                    #     else:
+                    #          actual_indexes.append(scan['index'])
+                    if result["#operator"] == 'UnionScan':
+                        actual_indexes = [scan['index'] if scan['#operator'] == 'IndexScan' else scan['scan']['index'] if scan['#operator'] == 'DistinctScan' else scan['index']
+                                          for results in result['scans'] for scan in results['scans']]
+                    else:
+                        actual_indexes = [scan['index'] if scan['#operator'] == 'IndexScan' else scan['scan']['index'] if scan['#operator'] == 'DistinctScan' else scan['index']
+                                          for scan in result['scans']]
+                    actual_indexes = [x.encode('UTF8') for x in actual_indexes]
+                    self.log.info('actual indexes "{0}"'.format(actual_indexes))
+                    self.log.info('compared against "{0}"'.format(indexes_names))
+                    self.assertTrue(set(actual_indexes) == set(indexes_names),"Indexes should be %s, but are: %s" % (indexes_names, actual_indexes))
+            else:
+                result = plan
+                self.assertTrue(result['#operator'] == 'CreateIndex',
+                                "Operator is not create index and is %s" % (result))
+            self.log.info('-'*100)
+
+    def _delete_indexes(self, indexes):
+        count = 0
+        for bucket in self.buckets:
+            query = "DROP INDEX %s.%s USING %s" % (bucket.name, indexes[count], self.index_type)
+            count =count+1
+            try:
+                self.run_cbq_query(query=query)
+            except:
+                pass
+
+    def _verify_view_is_present(self, view_name, bucket):
+        if self.primary_indx_type.lower() == 'gsi':
+            return
+        ddoc, _ = RestConnection(self.master).get_ddoc(bucket.name, "ddl_%s" % view_name)
+        self.assertTrue(view_name in ddoc["views"], "View %s wasn't created" % view_name)
+
+    def _is_index_in_list(self, bucket, index_name):
+        query = "SELECT * FROM system:indexes"
+        res = self.run_cbq_query(query)
+        for item in res['results']:
+            if 'keyspace_id' not in item['indexes']:
+                self.log.error(item)
+                continue
+            if item['indexes']['keyspace_id'] == bucket.name and item['indexes']['name'] == index_name:
+                return True
+        return False
+
+##############################################################################################
+#
+#   tuq_dml.py helpers
+##############################################################################################
+
+    def _insert_gen_keys(self, num_docs, prefix='a1_'):
+        def convert(data):
+            if isinstance(data, basestring):
+                return str(data)
+            elif isinstance(data, collections.Mapping):
+                return dict(map(convert, data.iteritems()))
+            elif isinstance(data, collections.Iterable):
+                return type(data)(map(convert, data))
+            else:
+                return data
+        keys = []
+        values = []
+        for gen_load in self.gens_load:
+            gen = copy.deepcopy(gen_load)
+            if len(keys) == num_docs:
+                break
+            for i in xrange(gen.end):
+                if len(keys) == num_docs:
+                    break
+                key, value = gen.next()
+                key = prefix + key
+                value = convert(json.loads(value))
+                for bucket in self.buckets:
+                    self.query = 'INSERT into %s (key , value) VALUES ("%s", %s)' % (bucket.name, key, value)
+                    actual_result = self.run_cbq_query()
+                    self.assertEqual(actual_result['status'], 'success', 'Query was not run successfully')
+                keys.append(key)
+                values.append(value)
+        return keys, values
+
+    def _keys_are_deleted(self, keys):
+        end_time = time.time() + TIMEOUT_DELETED
+        #Checks for keys deleted ...
+        while time.time() < end_time:
+            for bucket in self.buckets:
+                self.query = 'select meta(%s).id from %s'  % (bucket.name, bucket.name)
+                actual_result = self.run_cbq_query()
+                found = False
+                for key in keys:
+                    if actual_result['results'].count({'id' : key}) != 0:
+                        found = True
+                        break
+                if not found:
+                    return
+            self.sleep(3)
+        self.fail('Keys %s are still present' % keys)
+
+    def _common_insert(self, keys, values):
+        for bucket in self.buckets:
+            for i in xrange(len(keys)):
+                v = '"%s"' % values[i] if isinstance(values[i], str) else values[i]
+                self.query = 'INSERT into %s (key , value) VALUES ("%s", "%s")' % (bucket.name, keys[i], values[i])
+                actual_result = self.run_cbq_query()
+                self.assertEqual(actual_result['status'], 'success', 'Query was not run successfully')
+
+    def _common_check(self, key, expected_item_value, upsert=False):
+        clause = 'UPSERT' if upsert else 'INSERT'
+        for bucket in self.buckets:
+            inserted = expected_item_value
+            if isinstance(expected_item_value, str):
+                inserted = '"%s"' % expected_item_value
+            if expected_item_value is None:
+                inserted = 'null'
+            self.query = '%s into %s (key , value) VALUES ("%s", %s)' % (clause, bucket.name, key, inserted)
+            actual_result = self.run_cbq_query()
+            self.assertEqual(actual_result['status'], 'success', 'Query was not run successfully')
+            self.query = 'select * from %s use keys ["%s"]'  % (bucket.name, key)
+            try:
+                actual_result = self.run_cbq_query()
+            except:
+                pass
+            self.sleep(15, 'Wait for index rebuild')
+            actual_result = self.run_cbq_query()
+            self.assertEqual(actual_result['results'].count({bucket.name : expected_item_value}), 1,
+                             'Item did not appear')
+
+    def _common_check_values(self, keys, expected_item_values, upsert=False):
+        clause = 'UPSERT' if upsert else 'INSERT'
+        for bucket in self.buckets:
+            values = ''
+            for k, v in zip(keys, expected_item_values):
+                inserted = v
+                if isinstance(v, str):
+                    inserted = '"%s"' % v
+                if v is None:
+                    inserted = 'null'
+                values += '("%s", %s),' % (k, inserted)
+            self.query = '%s into %s (key , value) VALUES %s' % (clause, bucket.name, values[:-1])
+            actual_result = self.run_cbq_query()
+            self.assertEqual(actual_result['status'], 'success', 'Query was not run successfully')
+            self.query = 'select * from %s use keys ["%s"]'  % (bucket.name, '","'.join(keys))
+            try:
+                self.run_cbq_query()
+                self._wait_for_index_online(bucket, '#primary')
+            except:
+                pass
+            self.sleep(15, 'Wait for index rebuild')
+            actual_result = self.run_cbq_query()
+            for value in expected_item_values:
+                self.assertEqual(actual_result['results'].count({bucket.name : value}), expected_item_values.count(value),
+                                 'Item did not appear')
+
+    def load_with_dir(self, generators_load, exp=0, flag=0,
+                      kv_store=1, only_store_hash=True, batch_size=1, pause_secs=1,
+                      timeout_secs=30, op_type='create', start_items=0):
+        gens_load = {}
+        for bucket in self.buckets:
+            tmp_gen = []
+            for generator_load in generators_load:
+                tmp_gen.append(copy.deepcopy(generator_load))
+            gens_load[bucket] = copy.deepcopy(tmp_gen)
+        items = 0
+        for gen_load in gens_load[self.buckets[0]]:
+            items += (gen_load.end - gen_load.start)
+        shell = RemoteMachineShellConnection(self.master)
+        try:
+            for bucket in self.buckets:
+                self.log.info("%s %s to %s documents..." % (op_type, items, bucket.name))
+                self.log.info("Delete directory's content %s/data/default/%s ..." % (self.directory, bucket.name))
+                shell.execute_command('rm -rf %s/data/default/*' % self.directory)
+                self.log.info("Create directory %s/data/default/%s..." % (self.directory, bucket.name))
+                shell.execute_command('mkdir -p %s/data/default/%s' % (self.directory, bucket.name))
+                self.log.info("Load %s documents to %s/data/default/%s..." % (items, self.directory, bucket.name))
+                for gen_load in gens_load:
+                    for i in xrange(gen_load.end):
+                        key, value = gen_load.next()
+                        out = shell.execute_command("echo '%s' > %s/data/default/%s/%s.json" % (value, self.directory,
+                                                                                                bucket.name, key))
+                self.log.info("LOAD IS FINISHED")
+        finally:
+            shell.disconnect()
+        self.num_items = items + start_items
+        self.log.info("LOAD IS FINISHED")
+
+    def _delete_ids(self, result):
+        for item in result:
+            if '_id' in item:
+                del item['_id']
+            for bucket in self.buckets:
+                if bucket.name in item and 'id' in item[bucket.name]:
+                    del item[bucket.name]['_id']
+
+##############################################################################################
+#
+#   tuq_concurrent.py helpers
+##############################################################################################
+
+    def query_thread(self, method_name):
+        try:
+            fn = getattr(self, method_name)
+            fn()
+        except Exception as ex:
+            self.log.error("***************ERROR*************\n" + \
+                           "At least one of query threads is crashed: {0}".format(ex))
+            self.thread_crashed.set()
+            raise ex
+        finally:
+            if not self.thread_stopped.is_set():
+                self.thread_stopped.set()
+
+##############################################################################################
+#
+#   tuq_cluster_ops.py helpers
+##############################################################################################
+
+    def _create_multiple_indexes(self, index_field):
+        indexes = []
+        self.assertTrue(self.buckets, 'There are no buckets! check your parameters for run')
+        for bucket in self.buckets:
+            index_name = 'idx_%s_%s_%s' % (bucket.name, index_field, str(uuid.uuid4())[:4])
+            query = "CREATE INDEX %s ON %s(%s) USING %s" % (index_name, bucket.name,
+                                                            ','.join(index_field.split(';')), self.indx_type)
+            # if self.gsi_type:
+            #     query += " WITH {'index_type': 'memdb'}"
+            self.run_cbq_query(query=query)
+            if self.indx_type.lower() == 'gsi':
+                self._wait_for_index_online(bucket, index_name)
+        indexes.append(index_name)
+        return indexes
+
+    def _delete_multiple_indexes(self, indexes):
+        for bucket in self.buckets:
+            for index_name in set(indexes):
+                try:
+                    self.run_cbq_query(query="DROP INDEX %s.%s" % (bucket.name, index_name))
+                except:
+                    pass
+
+##############################################################################################
+#
+#   tuq_base64.py helpers
+##############################################################################################
+
+    def generate_docs(self, name="tuq", start=0, end=0):
+        if end==0:
+            end = self.num_items
+        values = ["Engineer", "Sales", "Support"]
+        generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
+        return generators
+
+    def _generate_full_docs_list(self, gens_load):
+        all_docs_list = []
+        for gen_load in gens_load:
+            doc_gen = copy.deepcopy(gen_load)
+            while doc_gen.has_next():
+                _, val = doc_gen.next()
+                all_docs_list.append(val)
+        return all_docs_list
+
+    def _verify_results(self, actual_result, expected_result):
+        self.assertEquals(len(actual_result), len(expected_result),
+                          "Results are incorrect.Actual num %s. Expected num: %s.\n" % (
+                              len(actual_result), len(expected_result)))
+        msg = "Results are incorrect.\n Actual first and last 100:  %s.\n ... \n %s" + \
+              "Expected first and last 100: %s.\n  ... \n %s"
+        self.assertTrue(sorted(actual_result) == sorted(expected_result),
+                        msg % (actual_result[:100],actual_result[-100:],
+                               expected_result[:100],expected_result[-100:]))

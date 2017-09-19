@@ -57,29 +57,3 @@ class Base64Tests(QueryTests):
                 self.log.info('Error appeared as expected')
             else:
                 self.fail('Error expected but not appeared')
-
-    def generate_docs(self, name="tuq", start=0, end=0):
-        if end==0:
-            end = self.num_items
-        values = ["Engineer", "Sales", "Support"]
-        generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
-        return generators
-
-    def _generate_full_docs_list(self, gens_load):
-        all_docs_list = []
-        for gen_load in gens_load:
-            doc_gen = copy.deepcopy(gen_load)
-            while doc_gen.has_next():
-                _, val = doc_gen.next()
-                all_docs_list.append(val)
-        return all_docs_list
-
-    def _verify_results(self, actual_result, expected_result):
-        self.assertEquals(len(actual_result), len(expected_result),
-                          "Results are incorrect.Actual num %s. Expected num: %s.\n" % (
-                                            len(actual_result), len(expected_result)))
-        msg = "Results are incorrect.\n Actual first and last 100:  %s.\n ... \n %s" +\
-        "Expected first and last 100: %s.\n  ... \n %s"
-        self.assertTrue(sorted(actual_result) == sorted(expected_result),
-                          msg % (actual_result[:100],actual_result[-100:],
-                                 expected_result[:100],expected_result[-100:]))
