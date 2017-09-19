@@ -73,8 +73,6 @@ class AscDescTests(QueryTests):
         test_results = dict()
         for test_name in test_dict.keys():
 
-            indexes = [(index[0], index[1], frozenset(index[2]), index[3], index[4])
-                       for index in test_dict[test_name]['indexes']]
             pre_queries = test_dict[test_name]['pre_queries']
             queries = test_dict[test_name]['queries']
             post_queries = test_dict[test_name]['post_queries']
@@ -109,7 +107,7 @@ class AscDescTests(QueryTests):
                         self.log.info("dropped index: %s %s %s" % (keyspace, name, using))
 
             query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
+            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
                                                   frozenset([key.strip('`') for key in i['indexes']['index_key']]),
                                                   i['indexes']['state'], i['indexes']['using'])
                                                  for i in query_response['results']]
