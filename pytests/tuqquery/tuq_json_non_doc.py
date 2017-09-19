@@ -73,16 +73,3 @@ class JSONNonDocTests(QueryTests):
             expected_result = [doc for doc in expected_result if doc[0] > 20 or doc[1] > 20 ]
             self._verify_results(sorted(actual_result), sorted(expected_result))
 
-    def generate_docs(self, values_type, name="tuq", start=0, end=0):
-        if end==0:
-            end = self.num_items
-        if values_type == 'string':
-            values = ['Engineer', 'Sales', 'Support']
-        elif values_type == 'int':
-            values = [100, 200, 300, 400, 500]
-        elif values_type == 'array':
-            values = [[10, 20], [20, 30], [30, 40]]
-        else:
-            return []
-        generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
-        return generators

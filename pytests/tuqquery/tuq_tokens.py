@@ -6,7 +6,6 @@ from pytests.basetestcase import BaseTestCase
 from tuqquery.tuq import ExplainPlanHelper
 from pytests.tuqquery.tuq import QueryTests
 
-
 class TokenTests(QueryTests):
     def setUp(self):
         if not self._testMethodName == 'suite_setUp':
@@ -15,16 +14,12 @@ class TokenTests(QueryTests):
         self.n1ql_port = self.input.param("n1ql_port", 8093)
         self.scan_consistency = self.input.param("scan_consistency", 'REQUEST_PLUS')
 
-    # def suite_setUp(self):
-    #     super(TokenTests, self).suite_setUp()
-
     def tearDown(self):
         server = self.master
         shell = RemoteMachineShellConnection(server)
         #  shell.execute_command("""curl -X DELETE -u Administrator:password http://{0}:8091/pools/default/buckets/beer-sample""".format(server.ip))
         self.sleep(20)
         super(TokenTests, self).tearDown()
-
 
     def test_tokens_secondary_indexes(self):
         self.rest.load_sample("beer-sample")
