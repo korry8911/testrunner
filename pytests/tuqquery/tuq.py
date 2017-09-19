@@ -4,6 +4,7 @@ import uuid
 import copy
 import pprint
 import re
+import logging
 import testconstants
 import time
 from remote.remote_util import RemoteMachineShellConnection
@@ -1490,3 +1491,815 @@ class QueryTests(BaseTestCase):
                 node_version = RestConnection(node).get_nodes_versions()
                 log.info("{0} node {1} Upgraded to: {2}".format(service, node.ip,
                                                                 node_version))
+##############################################################################################
+#
+# n1ql_rbac_2.py helpers
+# Again very specific, some things are generalizable, perhaps rbac should have its own query base test,
+# also a huge number of helpers will clutter this up
+##############################################################################################
+    def create_users(self, users=None):
+        """
+        :param user: takes a list of {'id': 'xxx', 'name': 'some_name ,
+                                        'password': 'passw0rd'}
+        :return: Nothing
+        """
+        if not users:
+            users = self.users
+        RbacBase().create_user_source(users,'builtin',self.master)
+        self.log.info("SUCCESS: User(s) %s created"
+                      % ','.join([user['name'] for user in users]))
+
+    def assign_role(self, rest=None, roles=None):
+        if not rest:
+            rest = RestConnection(self.master)
+        #Assign roles to users
+        if not roles:
+            roles = self.roles
+        RbacBase().add_user_role(roles, rest,'builtin')
+        for user_role in roles:
+            self.log.info("SUCCESS: Role(s) %s assigned to %s"
+                          %(user_role['roles'], user_role['id']))
+
+    def delete_role(self, rest=None, user_ids=None):
+        if not rest:
+            rest = RestConnection(self.master)
+        if not user_ids:
+            user_ids = [user['id'] for user in self.roles]
+        RbacBase().remove_user_role(user_ids, rest)
+        self.sleep(20, "wait for user to get deleted...")
+        self.log.info("user roles revoked for %s" % ", ".join(user_ids))
+
+    def get_user_list(self):
+        """
+        :return:  a list of {'id': 'userid', 'name': 'some_name ,
+        'password': 'passw0rd'}
+        """
+        user_list = []
+        for user in self.inp_users:
+            user_list.append({att: user[att] for att in ('id',
+                                                         'name',
+                                                         'password')})
+        return user_list
+
+    def get_user_role_list(self):
+        """
+        :return:  a list of {'id': 'userid', 'name': 'some_name ,
+         'roles': 'admin:fts_admin[default]'}
+        """
+        user_role_list = []
+        for user in self.inp_users:
+            user_role_list.append({att: user[att] for att in ('id',
+                                                              'name',
+                                                              'roles')})
+        return user_role_list
+
+    def retrieve_roles(self):
+        server = self.master
+        rest = RestConnection(server)
+        url = "/settings/rbac/roles"
+        api = rest.baseUrl + url
+        status, content, header = rest._http_request(api, 'GET')
+        self.log.info(" Retrieve all User roles - Status - {0} -- Content - {1} -- Header - {2}".format(status, content, header))
+        return status, content, header
+
+    def retrieve_users(self):
+        rest = RestConnection(self.master)
+        url = "/settings/rbac/users"
+        api = rest.baseUrl + url
+        status, content, header = rest._http_request(api, 'GET')
+        self.log.info(" Retrieve User Roles - Status - {0} -- Content - {1} -- Header - {2}".format(status, content, header))
+        return status, content, header
+
+    def grant_role(self, role=None):
+        if not role:
+            role = self.roles[0]['roles']
+        if self.all_buckets:
+            list = []
+            for bucket in self.buckets:
+                list.append(bucket.name)
+            names = ','.join(list)
+            self.query = "GRANT {0} on {1} to {2}".format(role,names, self.users[0]['id'])
+            actual_result = self.run_cbq_query()
+        elif "," in role:
+            roles = role.split(",")
+            for role in roles:
+                role1 = role.split("(")[0]
+                name = role.split("(")[1][:-1]
+                self.query = "GRANT {0} on {1} to {2}".format(role1,name, self.users[0]['id'])
+                actual_result =self.run_cbq_query()
+        elif "(" in role:
+                role1 = role.split("(")[0]
+                name = role.split("(")[1][:-1]
+                self.query = "GRANT {0} on {1} to {2}".format(role1,name, self.users[0]['id'])
+                actual_result = self.run_cbq_query()
+        else:
+                self.query = "GRANT {0} to {1}".format(role, self.users[0]['id'])
+                actual_result = self.run_cbq_query()
+
+        self.assertTrue(actual_result['status'] == 'success', "Unable to grant role {0} to {1}".
+                                                                format(role, self.users[0]['id']))
+
+    def revoke_role(self, role=None):
+        if not role:
+            role = self.roles[0]['roles']
+            if self.all_buckets:
+                role += "(`*`)"
+        self.query = "REVOKE {0} FROM {1}".format(role, self.users[0]['id'])
+        actual_result = self.run_cbq_query()
+        self.assertTrue(actual_result['status'] == 'success', "Unable to revoke role {0} from {1}".
+                                                                format(role, self.users[0]['id']))
+
+    def curl_with_roles(self, query):
+        shell = RemoteMachineShellConnection(self.master)
+        cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d " \
+              "'statement={3}'". \
+            format(self.users[0]['id'], self.users[0]['password'], self.master.ip, query,
+                   self.curl_path)
+        output, error = shell.execute_command(cmd)
+        shell.log_command_output(output, error)
+        new_list = [string.strip() for string in output]
+        concat_string = ''.join(new_list)
+        json_output = json.loads(concat_string)
+        try:
+            return json_output
+        except ValueError:
+            return error
+
+    def system_catalog_helper_select(self, test, role=""):
+        self.query = 'select * from system:datastores'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(res['metrics']['resultCount'] == 1)
+        self.query = 'select * from system:namespaces'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(res['metrics']['resultCount'] == 1)
+        self.query = 'select * from system:keyspaces'
+        res = self.curl_with_roles(self.query)
+        if (role == "query_system_catalog"):
+            self.assertTrue(res['metrics']['resultCount'] == 2)
+        elif (
+                    role == "query_update(default)" or role == "query_delete(default)" or
+                        role == "query_insert(default)"):
+            self.assertTrue(res['status'] == 'success')
+        elif (role.startswith("query_") or role.startswith("select")):
+            self.assertTrue(res['metrics']['resultCount'] == 1)
+        elif (role == "bucket_full_access(default)"):
+            self.assertTrue(res['metrics']['resultCount'] == 1)
+        elif (role == "query_delete(default)"):
+            self.assertTrue(res['metrics']['resultCount'] == 1)
+        else:
+            self.assertTrue(res['metrics']['resultCount'] == 2)
+        self.query = 'create primary index on {0}'.format(self.buckets[0].name)
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+
+        if (
+                    role != "query_insert(default)" or role != "query_update(default)" or
+                        role != "query_delete(default)"):
+            self.query = 'create primary index on {0}'.format(self.buckets[1].name)
+            try:
+                self.curl_with_roles(self.query)
+            except Exception, ex:
+                self.log.error(ex)
+
+        if (role != "views_admin(standard_bucket0)" or role != "views_admin(default)" or
+                    role != "query_insert(default)" or role != "query_update(default)" or
+                    role != "query_delete(default)"):
+            self.query = 'create index idx1 on {0}(name)'.format(self.buckets[0].name)
+            res = self.curl_with_roles(self.query)
+            self.sleep(10)
+            self.query = 'create index idx2 on {0}(name)'.format(self.buckets[1].name)
+            self.curl_with_roles(self.query)
+            self.sleep(10)
+            self.query = 'select * from system:indexes'
+            res = self.curl_with_roles(self.query)
+        if (role == "admin" or role == "cluster_admin" or role == "bucket_admin"):
+            self.assertTrue(res['metrics']['resultCount'] == 4)
+        elif (role == "bucket_admin(default)" or role == "bucket_admin(standard_bucket0)"
+              or role == "query_system_catalog" or role == "ro_admin" or role ==
+            "replication_admin"):
+            self.assertTrue(res['status'] == 'success')
+        self.query = 'select * from system:dual'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(res['metrics']['resultCount'] == 1)
+        self.query = 'select * from system:user_info'
+        res = self.curl_with_roles(self.query)
+        if (role == "admin"):
+            self.assertTrue(res['status'] == 'success')
+        elif (role == "cluster_admin"):
+            self.assertTrue(str(res).find("'code': 13014") != -1)
+        self.query = 'select * from system:nodes'
+        res = self.curl_with_roles(self.query)
+        if (role == "bucket_full_access(default)"):
+            self.assertTrue(res['status'] == 'stopped')
+        elif (
+                        role == "select(default)" or role == "query_select(default)" or
+                            role == "select(standard_bucket0)" or role == "query_select("
+                                                                          "standard_bucket0)"):
+            self.assertTrue(str(res).find("'code': 13014") != -1)
+        elif (
+                        role == "insert(default)" or role == "query_insert(default)" or
+                            role == "query_update(default)" or role == "query_delete("
+                                                                       "default)"):
+            self.assertTrue(res['status'] == 'stopped')
+        else:
+            self.assertTrue(res['status'] == 'success')
+        self.query = 'select * from system:applicable_roles'
+        res = self.curl_with_roles(self.query)
+        if (role == "admin"):
+            self.assertTrue(res['status'] == 'success')
+        elif (role == "ro_admin"):
+            self.assertTrue(res['status'] == 'success')
+        elif (role == "cluster_admin" or role == "bucket_admin(default)"):
+            self.assertTrue(str(res).find("'code': 13014") != -1)
+
+        # if (role == "query_insert(default)" or role == "query_delete(default)" or role
+        # == "query_update(default)"):
+        #     self.assertTrue(res['status']=='stopped')
+        # elif(role == "bucket_admin(standard_bucket0)" or role == "views_admin(
+        # standard_bucket0)" or role == "views_admin(default)" or role == "views_admin"
+        # or role == "replication_admin" or role == "query_system_catalog" or role ==
+        # "ro_admin"):
+        #     self.assertTrue(str(res).find("'code': 13014")!=-1)
+        # else:
+        #     self.assertTrue(res['metrics']['resultCount']> 0)
+        if (
+                                        role != "ro_admin" and role !=
+                                            "replication_admin" and role !=
+                                        "query_insert(default)" and role !=
+                                    "query_delete(default)" and role != "query_update("
+                                                                        "default)" and
+                                role != "bucket_full_access(default)" and role !=
+                        "query_system_catalog" and role != "views_admin(default)"):
+            self.query = "prepare st1 from select * from default union select * from " \
+                         "default union select * from default"
+            res = self.curl_with_roles(self.query)
+            self.query = 'execute st1'
+            res = self.curl_with_roles(self.query)
+            if (
+                        role == "bucket_admin(standard_bucket0)" or role == "views_admin("
+                                                                            "standard_bucket0)" or role == "replication_admin"):
+                self.assertTrue(str(res).find("'code': 4040") != -1)
+            elif (role == "select(default)" or role == "query_select(default)"):
+                self.assertTrue(res['metrics']['resultCount'] == 0)
+            else:
+                self.assertTrue(res['status'] == 'success')
+
+            if (
+                        role != "query_insert(default)" and role != "query_delete("
+                                                                    "default)" and role
+                        != "query_update(default)"):
+                self.query = "prepare st2 from select * from default union select * from " \
+                             "standard_bucket0 union select * from default"
+                res = self.curl_with_roles(self.query)
+
+                if (
+                                                    role == "bucket_admin("
+                                                            "standard_bucket0)" or role
+                                                        == "views_admin("
+                                                           "standard_bucket0)" or role ==
+                                                    "views_admin(default)" or role ==
+                                                "views_admin" or role == "bucket_admin("
+                                                                         "default)" or
+                                            role == "replication_admin" or role ==
+                                    "query_system_catalog" or role == "select(default)"
+                        or role == "query_select(default)"):
+                    self.assertTrue(str(res).find("'code': 13014") != -1)
+                else:
+                    self.assertTrue(res['metrics']['resultCount'] > 0)
+                self.query = 'execute st2'
+                res = self.curl_with_roles(self.query)
+                if (
+                                                    role == "bucket_admin("
+                                                            "standard_bucket0)" or role
+                                                        == "views_admin("
+                                                           "standard_bucket0)" or role ==
+                                                    "views_admin(default)" or role ==
+                                                "views_admin" or role == "bucket_admin("
+                                                                         "default)" or
+                                            role == "replication_admin" or role ==
+                                    "query_system_catalog" or role == "select(default)"
+                        or role == "query_select(default)"):
+                    self.assertTrue(str(res).find("'code': 4040") != -1)
+                else:
+                    self.assertTrue(res['status'] == 'success')
+                self.query = 'select * from system:completed_requests'
+                res = self.curl_with_roles(self.query)
+                if (role == "select(default)" or role == "query_select(default)"):
+                    self.assertTrue(str(res).find("'code': 13014") != -1)
+                elif (role == "bucket_admin(standard_bucket0)"):
+                    self.assertTrue(res['metrics']['resultCount'] > 0)
+                else:
+                    self.assertTrue(res['status'] == 'success')
+
+        if (
+                            role != "query_insert(default)" and role != "query_delete("
+                                                                        "default)" and
+                                role != "query_update(default)" and role !=
+                        "bucket_full_access(default)" and role != "ro_admin"):
+            self.query = 'select * from system:prepareds'
+            res = self.curl_with_roles(self.query)
+            if (role == "select(default)" or role == "query_select(default)"):
+                self.assertTrue(str(res).find("'code': 13014") != -1)
+            else:
+                self.assertTrue(res['status'] == 'success')
+
+            self.query = 'select * from system:active_requests'
+            res = self.curl_with_roles(self.query)
+
+            if (role == "select(default)" or role == "query_select(default)"):
+                self.assertTrue(str(res).find("'code': 13014") != -1)
+            else:
+                self.assertTrue(res['metrics']['resultCount'] > 0)
+
+            self.query = 'drop index {0}.idx1'.format(self.buckets[0].name)
+            res = self.curl_with_roles(self.query)
+            self.query = 'drop index {0}.idx2'.format(self.buckets[1].name)
+            res = self.curl_with_roles(self.query)
+            self.query = 'select * from system:indexes'
+            res = self.curl_with_roles(self.query)
+        if (role == "views_admin(default)"):
+            self.assertTrue(res['status'] == 'success')
+        elif (
+                        role == "bucket_admin(standard_bucket0)" or role ==
+                            "bucket_admin(default)" or role == "select(default)" or role
+                    == "query_select(default)"):
+            self.assertTrue(res['metrics']['resultCount'] == 1)
+        elif (
+                    role == "query_insert(default)" or role == "query_delete(default)" or
+                        role == "query_update(default)"):
+            self.assertTrue(res['metrics']['resultCount'] == 0)
+            # elif (role == "ro_admin"):
+            #     self.assertTrue(res['metrics']['resultCount']==2)
+
+    def system_catalog_helper_insert(self, test, role=""):
+        self.query = 'insert into system:datastores values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:namespaces values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:keyspaces values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:indexes values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:dual values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find(
+                "System datastore error Mutations not allowed on system:dual.") != -1)
+        self.query = 'insert into system:user_info values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:nodes values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:applicable_roles values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:prepareds values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:completed_requests values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+        self.query = 'insert into system:active_requests values("k051", { "id":123  } )'
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("System datastore :  Not implemented ") != -1)
+
+    def system_catalog_helper_update(self, test, role=""):
+        self.query = 'update system:datastores use keys "%s" set name="%s"' % ("id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11000") != -1)
+        self.query = 'update system:namespaces use keys "%s" set name="%s"' % ("id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11003") != -1)
+        self.query = 'update system:keyspaces use keys "%s" set name="%s"' % ("id", "test")
+        # panic seen here as of now,hence commenting it out for now.
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11003") != -1)
+        self.query = 'update system:indexes use keys "%s" set name="%s"' % ("id", "test")
+        # panic seen here as of now,hence commenting it out for now.
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11003") != -1)
+        self.query = 'update system:dual use keys "%s" set name="%s"' % ("id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11003") != -1)
+        self.query = 'update system:user_info use keys "%s" set name="%s"' % ("id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.assertTrue(str(ex).find("'code': 5200") != -1)
+        self.query = 'update system:nodes use keys "%s" set name="%s"' % ("id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11003}") != -1)
+        # panic seen here as of now,hence commenting it out for now.
+        self.query = 'update system:applicable_roles use keys "%s" set name="%s"' % (
+        "id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11000") != -1)
+        self.query = 'update system:active_requests use keys "%s" set name="%s"' % (
+        "id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11000") != -1)
+        self.query = 'update system:completed_requests use keys "%s" set name="%s"' % (
+        "id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11000") != -1)
+        self.query = 'update system:prepareds use keys "%s" set name="%s"' % ("id", "test")
+        try:
+            self.curl_with_roles(self.query)
+        except Exception, ex:
+            self.log.error(ex)
+            self.assertTrue(str(ex).find("'code': 11000") != -1)
+
+    # Query does not support drop these tables or buckets yet.We can add the test once it
+    #  is supported.
+    # Right now we cannot compare results in assert.
+    # def system_catalog_helper_drop(self,query_params_with_roles,test = ""):
+    #     self.query = 'drop system:datastores'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:namespaces'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:keyspaces'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:indexes'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:dual'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:user_info'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:nodes'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:applicable_roles'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:prepareds'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:completed_requests'
+    #     res = self.run_cbq_query()
+    #     print res
+    #     self.query = 'drop system:active_requests'
+    #     res = self.run_cbq_query()
+    #     print res
+
+
+    def system_catalog_helper_delete(self, test, role="admin"):
+        self.query = 'delete from system:datastores'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(str(res).find("'code': 11003") != -1)
+        self.query = 'delete from system:namespaces'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(str(res).find("'code': 11003") != -1)
+        # To be fixed in next version
+        # self.query = 'delete from system:keyspaces'
+        # res = self.curl_with_roles(self.query)
+        # self.assertTrue(str(res).find("'code': 11003")!=-1)
+        self.query = 'delete from system:indexes'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(str(res).find("'code': 11003") != -1)
+        self.query = 'delete from system:dual'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(str(res).find("'code': 11000") != -1)
+        self.query = 'delete from system:user_info'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(str(res).find("'code': 11003") != -1)
+        self.query = 'delete from system:nodes'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(str(res).find("'code': 11003") != -1)
+        self.query = 'delete from system:applicable_roles'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(str(res).find("'code': 11003") != -1)
+
+        self.query = 'delete from system:completed_requests'
+        res = self.curl_with_roles(self.query)
+        if (
+                        role == "query_delete(default)" or role == "query_delete("
+                                                                   "standard_bucket0)" or
+                            role == "delete(default)" or role == "bucket_full_access("
+                                                                 "default)"):
+            self.assertNotEquals(res['status'], 'success')
+        else:
+            self.assertTrue(res['status'] == 'success')
+        self.query = 'delete from system:active_requests'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(res['status'] == 'stopped')
+        if (
+                        role != "query_delete(default)" and role != "query_delete(standard_bucket0)" and role != "bucket_full_access(default)" and role != "delete(default)"):
+            self.query = 'delete from system:prepareds'
+            res = self.curl_with_roles(self.query)
+            self.assertTrue(res['status'] == 'success')
+
+    def select_my_user_info(self):
+        self.query = 'select * from system:my_user_info'
+        res = self.curl_with_roles(self.query)
+        self.assertTrue(res['status'] == 'success')
+
+##############################################################################################
+#
+#  tuq_curl.py and tuq_curl_whitelist.py helpers
+#
+##############################################################################################
+
+    '''Convert output of remote_util.execute_commands_inside to json'''
+    def convert_to_json(self,output_curl):
+        new_curl = "{" + output_curl
+        json_curl = json.loads(new_curl)
+        return json_curl
+
+    '''Convert output of remote_util.execute_command to json
+       (stripping all white space to match execute_command_inside output)'''
+    def convert_list_to_json(self,output_of_curl):
+        new_list = [string.replace(" ", "") for string in output_of_curl]
+        concat_string = ''.join(new_list)
+        json_output=json.loads(concat_string)
+        return json_output
+
+    '''Convert output of remote_util.execute_command to json to match the output of run_cbq_query'''
+    def convert_list_to_json_with_spacing(self,output_of_curl):
+        new_list = [string.strip() for string in output_of_curl]
+        concat_string = ''.join(new_list)
+        json_output=json.loads(concat_string)
+        return json_output
+
+
+##############################################################################################
+#
+#  tuq_advancedcbqshell.py helpers
+#
+##############################################################################################
+
+    #Should probably just make this an if statement inside of remote_util to modify the problematic line of code
+    def execute_commands_inside(self, main_command, query, queries, bucket1, password, bucket2, source,
+                                subcommands=[], min_output_size=0,
+                                end_msg='', timeout=250):
+        shell = RemoteMachineShellConnection(self.master)
+        shell.extract_remote_info()
+        filename = "/tmp/test2"
+        iswin = False
+
+        if shell.info.type.lower() == 'windows':
+            iswin = True
+            filename = "/cygdrive/c/tmp/test.txt"
+
+        filedata = ""
+        if not (query == ""):
+            main_command = main_command + " -s=\"" + query + '"'
+        elif (shell.remote and not (queries == "")):
+            sftp = shell._ssh_client.open_sftp()
+            filein = sftp.open(filename, 'w')
+            for query in queries:
+                filein.write(query)
+                filein.write('\n')
+            fileout = sftp.open(filename, 'r')
+            filedata = fileout.read()
+            fileout.close()
+        elif not (queries == ""):
+            f = open(filename, 'w')
+            for query in queries:
+                f.write(query)
+                f.write('\n')
+            f.close()
+            fileout = open(filename, 'r')
+            filedata = fileout.read()
+            fileout.close()
+
+        newdata = filedata.replace("bucketname", bucket2)
+        newdata = newdata.replace("user", bucket1)
+        newdata = newdata.replace("pass", password)
+        newdata = newdata.replace("bucket1", bucket1)
+
+        newdata = newdata.replace("user1", bucket1)
+        newdata = newdata.replace("pass1", password)
+        newdata = newdata.replace("bucket2", bucket2)
+        newdata = newdata.replace("user2", bucket2)
+        newdata = newdata.replace("pass2", password)
+
+        if (shell.remote and not (queries == "")):
+            f = sftp.open(filename, 'w')
+            f.write(newdata)
+            f.close()
+        elif not (queries == ""):
+            f = open(filename, 'w')
+            f.write(newdata)
+            f.close()
+        if not (queries == ""):
+            if (source):
+                if iswin:
+                    main_command = main_command + "  -s=\"\SOURCE " + 'c:\\\\tmp\\\\test.txt'
+                else:
+                    main_command = main_command + "  -s=\"\SOURCE " + filename + '"'
+            else:
+                if iswin:
+                    main_command = main_command + " -f=" + 'c:\\\\tmp\\\\test.txt'
+                else:
+                    main_command = main_command + " -f=" + filename
+
+        log.info("running command on {0}: {1}".format(self.master.ip, main_command))
+        output = ""
+        if shell.remote:
+            stdin, stdout, stderro = shell._ssh_client.exec_command(main_command)
+            time.sleep(20)
+            count = 0
+            for line in stdout.readlines():
+                if (count >= 0):
+                    output += line.strip()
+                    output = output.strip()
+                    if "Inputwasnotastatement" in output:
+                        output = "status:FAIL"
+                        break
+                    if "timeout" in output:
+                        output = "status:timeout"
+                else:
+                    count += 1
+            stdin.close()
+            stdout.close()
+            stderro.close()
+        else:
+            p = Popen(main_command, shell=True, stdout=PIPE, stderr=PIPE)
+            stdout, stderro = p.communicate()
+            output = stdout
+            print output
+            time.sleep(1)
+        if (shell.remote and not (queries == "")):
+            sftp.remove(filename)
+            sftp.close()
+        elif not (queries == ""):
+            os.remove(filename)
+
+        return (output)
+
+##############################################################################################
+#
+#  date_time_functions.py helpers
+#   These are very specific to this testing, should probably go back
+##############################################################################################
+
+    def _generate_date_part_millis_query(self, expression, part, timezone=None):
+        if not timezone:
+            query = 'SELECT DATE_PART_MILLIS({0}, "{1}")'.format(expression, part)
+        else:
+            query = 'SELECT DATE_PART_MILLIS({0}, "{1}", "{2}")'.format(expression, part, timezone)
+        return query
+
+
+    def _generate_date_format_str_query(self, expression, format):
+        query = 'SELECT DATE_FORMAT_STR("{0}", "{1}")'.format(expression, format)
+        return query
+
+
+    def _generate_date_range_str_query(self, initial_date, final_date, part, increment=None):
+        if increment is None:
+            query = 'SELECT DATE_RANGE_STR("{0}", "{1}", "{2}")'.format(initial_date, final_date, part)
+        else:
+            query = 'SELECT DATE_RANGE_STR("{0}", "{1}", "{2}", {3})'.format(initial_date, final_date,
+                                                                             part, increment)
+        return query
+
+
+    def _generate_date_range_millis_query(self, initial_millis, final_millis, part, increment=None):
+        if increment is None:
+            query = 'SELECT DATE_RANGE_MILLIS({0}, {1}, "{2}")'.format(initial_millis, final_millis,
+                                                                       part)
+        else:
+            query = 'SELECT DATE_RANGE_MILLIS({0}, {1}, "{2}", {3})'.format(initial_millis,
+                                                                            final_millis, part,
+                                                                            increment)
+        return query
+
+
+    def _convert_to_millis(self, expression):
+        query = 'SELECT STR_TO_MILLIS("{0}")'.format(expression)
+        results = self.run_cbq_query(query)
+        return results["results"][0]["$1"]
+
+
+    def _is_date_part_present(self, expression):
+        return (len(expression.split("-")) > 1)
+
+
+    def _is_time_part_present(self, expression):
+        return (len(expression.split(":")) > 1)
+
+##############################################################################################
+#
+#  n1ql_options.py helpers
+#   Seem specific to this test file, most should go back (curl helper looks like it could be leveraged elsewhere)
+##############################################################################################
+
+    def curl_helper(self, statement):
+        shell = RemoteMachineShellConnection(self.master)
+        cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement={3}'". \
+            format('Administrator', 'password', self.master.ip, statement, self.curl_path)
+        output, error = shell.execute_command(cmd)
+        new_list = [string.strip() for string in output]
+        concat_string = ''.join(new_list)
+        json_output = json.loads(concat_string)
+        return json_output
+
+
+    def prepare_helper(self, statement):
+        shell = RemoteMachineShellConnection(self.master)
+        cmd = '{4} -u {0}:{1} http://{2}:8093/query/service -d \'prepared="{3}"&$type="Engineer"&$name="employee-4"\''. \
+            format('Administrator', 'password', self.master.ip, statement, self.curl_path)
+        output, error = shell.execute_command(cmd)
+        new_list = [string.strip() for string in output]
+        concat_string = ''.join(new_list)
+        json_output = json.loads(concat_string)
+        return json_output
+
+
+    def prepare_helper2(self, statement):
+        shell = RemoteMachineShellConnection(self.master)
+        cmd = '{4} -u {0}:{1} http://{2}:8093/query/service -d \'prepared="{3}"&args=["Engineer","employee-4"]\''. \
+            format('Administrator', 'password', self.master.ip, statement, self.curl_path)
+        output, error = shell.execute_command(cmd)
+        new_list = [string.strip() for string in output]
+        concat_string = ''.join(new_list)
+        json_output = json.loads(concat_string)
+        return json_output
+
+##############################################################################################
+#
+#  n1ql_ro_user.py helpers
+#   Seem specific to this test file, most should go back
+##############################################################################################
+
+    def _kill_all_processes_cbq(self):
+        if hasattr(self, 'shell'):
+            o = self.shell.execute_command("ps -aef| grep cbq-engine")
+            if len(o):
+                for cbq_engine in o[0]:
+                    if cbq_engine.find('grep') == -1:
+                        pid = [item for item in cbq_engine.split(' ') if item][1]
+                        self.shell.execute_command("kill -9 %s" % pid)
