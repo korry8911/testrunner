@@ -1426,7 +1426,7 @@ class QuerySanityTests(QueryTests):
     def test_optimized_let(self):
         self.query = 'explain select name1 from default let name1 = substr(name[0].FirstName,0,10) WHERE name1 = "employeefi"'
         res =self.run_cbq_query()
-        plan = ExplainPlanHelper(res)
+        plan = self.ExplainPlanHelper(res)
         self.assertTrue(plan['~children'][2]['~child']['~children']==[{u'#operator': u'Let', u'bindings': [{u'var': u'name1', u'expr':
             u'substr0((((`default`.`name`)[0]).`FirstName`), 0, 10)'}]}, {u'#operator': u'Filter', u'condition': u'(`name1` = "employeefi")'},
             {u'#operator': u'InitialProject', u'result_terms': [{u'expr': u'`name1`'}]}, {u'#operator': u'FinalProject'}])
@@ -1436,7 +1436,7 @@ class QuerySanityTests(QueryTests):
         self.assertTrue(res['results'] == [{u'name1': u'employeefi'}, {u'name1': u'employeefi'}])
         self.query = 'explain select name1 from default let name1 = substr(name[0].FirstName,0,10) WHERE name[0].MiddleName = "employeefirstname-4"'
         res =self.run_cbq_query()
-        plan = ExplainPlanHelper(res)
+        plan = self.ExplainPlanHelper(res)
         self.assertTrue(plan['~children'][2]['~child']['~children']==
                     [{u'#operator': u'Filter', u'condition': u'((((`default`.`name`)[0]).`MiddleName`) = "employeefirstname-4")'},
                      {u'#operator': u'Let', u'bindings': [{u'var': u'name1', u'expr': u'substr0((((`default`.`name`)[0]).`FirstName`), 0, 10)'}]},
@@ -1455,7 +1455,7 @@ class QuerySanityTests(QueryTests):
 
             self.query = 'explain select d.x from {0} d where x in (select raw d.x from {0} b use keys ["kk02"])'.format(bucket.name)
             actual_result = self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
             self.query = 'select d.x from {0} d where x in (select raw d.x from {0} b use keys ["kk02"])'.format(bucket.name)
@@ -1463,7 +1463,7 @@ class QuerySanityTests(QueryTests):
             self.assertTrue( actual_result['results'] == [{u'x': 100}])
             self.query = 'explain select d.x from {0} d where x IN (select raw d.x from {0} b use keys[d.id])'.format(bucket.name)
             actual_result =self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
             self.query = 'select d.x from {0} d where x IN (select raw d.x from {0} b use keys[d.id])'.format(bucket.name)
@@ -1471,7 +1471,7 @@ class QuerySanityTests(QueryTests):
             self.assertTrue( actual_result['results'] == [{u'x': 100}])
             self.query = 'explain select d.x from {0} d where x IN (select raw b.x from {0} b  where b.x IN (select raw d.x from {0} c  use keys["kk02"]))'.format(bucket.name)
             actual_result =self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
             self.query = 'select d.x from {0} d where x IN (select raw b.x from {0} b  where b.x IN (select raw d.x from {0} c  use keys["kk02"]))'.format(bucket.name)
@@ -1479,7 +1479,7 @@ class QuerySanityTests(QueryTests):
             self.assertTrue( actual_result['results'] == [{u'x': 100}])
             self.query = 'explain select d.x from {0} d where x IN (select raw b.x from {0} b  where b.x IN (select raw d.x from {0} c  use keys["kk02"] where d.x = b.x))'.format(bucket.name)
             actual_result=self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
             self.query = 'select d.x from {0} d where x IN (select raw b.x from {0} b  where b.x IN (select raw d.x from {0} c  use keys["kk02"] where d.x = b.x))'.format(bucket.name)
@@ -1487,7 +1487,7 @@ class QuerySanityTests(QueryTests):
             self.assertTrue( actual_result['results'] == [{u'x': 100}])
             self.query = 'explain select d.x from {0} d where x IN (select raw b.x from {0} b  where b.x IN (select raw d.x from {0} c  use keys["kk02"] where d.x = b.x))'.format(bucket.name)
             actual_result=self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
 
@@ -1497,7 +1497,7 @@ class QuerySanityTests(QueryTests):
 
             self.query = 'explain select d.x from {0} d where x IN (select raw b.x from {0} b use keys["kk02"] where b.x IN (select raw d.x from {0} c  use keys["kk02"]))'.format(bucket.name)
             actual_result=self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
 
@@ -1507,7 +1507,7 @@ class QuerySanityTests(QueryTests):
 
             self.query = 'explain select d.x,d.id from {0} d where x IN (select raw b.x from {0} b  where b.x IN (select raw d.x from {0} c  use keys["kk02"]))'.format(bucket.name)
             actual_result=self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
 
@@ -1525,7 +1525,7 @@ class QuerySanityTests(QueryTests):
 
             self.query = 'explain select (select raw d.x from default c  use keys[d.id]) as s, d.x from default d where x is not null'.format(bucket.name)
             actual_result=self.run_cbq_query()
-            plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             #print plan
             self.assertTrue("covers" in str(plan))
             self.assertTrue(plan['~children'][0]['index']=='ix1')
@@ -2570,7 +2570,7 @@ class QuerySanityTests(QueryTests):
         for bucket in self.buckets:
             res = self.run_cbq_query()
             self.log.info(res)
-	    plan = ExplainPlanHelper(res)
+            plan = self.ExplainPlanHelper(res)
             self.assertTrue(plan["~children"][0]["index"] == "#primary",
                             "Type should be #primary, but is: %s" % plan["~children"][0]["index"])
 

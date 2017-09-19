@@ -3,12 +3,11 @@ from lib.membase.api.exception import CBQError
 from lib.membase.api.rest_client import RestConnection
 from lib.remote.remote_util import RemoteMachineShellConnection
 from pytests.basetestcase import BaseTestCase
-from tuqquery.tuq import ExplainPlanHelper
-from pytests.tuqquery.tuq import QueryTests
+from tuq_sanity import ExplainPlanHelper
+from tuq import QueryTests
 import time
 import sys
 import traceback
-
 
 class AscDescTests(QueryTests):
     def setUp(self):
@@ -18,165 +17,6 @@ class AscDescTests(QueryTests):
 
     def tearDown(self):
         super(AscDescTests, self).tearDown()
-
-    # Helper function to run queries and compare results statically and with primary index
-    def compare(self, test, query, expected_result_list):
-        actual_result_list = []
-        actual_result = self.run_cbq_query(query)
-
-        for i in xrange(0, 5):
-            if test in ["test_asc_desc_composite_index", "test_meta", "test_asc_desc_array_index"]:
-                actual_result_list.append(actual_result['results'][i]['default']['_id'])
-            elif test in ["test_desc_isReverse_ascOrder"]:
-                actual_result_list.append(actual_result['results'][i]['id'])
-
-        self.assertEqual(actual_result_list, expected_result_list)
-        query = query.replace("from default", "from default use index(`#primary`)")
-        expected_result = self.run_cbq_query(query)
-        self.assertEqual(actual_result['results'], expected_result['results'])
-
-    def _wait_for_index_present(self, bucket_name, index_name, fields_set, using, timeout=60):
-        end_time = time.time() + timeout
-        desired_index = (index_name, bucket_name, frozenset([field.split()[0] for field in fields_set]),
-                         "online", using)
-        while time.time() < end_time:
-            query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            self.log.info(query_response)
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
-                                frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                i['indexes']['state'], i['indexes']['using'])
-                               for i in query_response['results']]
-            if desired_index in current_indexes:
-                return
-            else:
-                msg = 'sleeping for 5 seconds: waiting for %s to be in %s' % (desired_index, current_indexes)
-                self.sleep(5, msg)
-        msg = 'index %s was not found in %s before timeout' % (desired_index, current_indexes)
-        raise Exception(msg)
-
-    def _wait_for_index_drop(self, bucket_name, index_name, timeout=6000):
-        end_time = time.time() + timeout
-        drop_index = (index_name, bucket_name)
-        while time.time() < end_time:
-            query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'])
-                               for i in query_response['results']]
-            if drop_index not in current_indexes:
-                return
-            else:
-                msg = 'index is pending or in the list. sleeping... (%s)' % [index for index in current_indexes]
-                self.sleep(5, msg)
-        msg = 'index %s is online. last response is %s' % (drop_index, [index for index in current_indexes])
-        raise Exception(msg)
-
-    def query_runner(self, test_dict):
-        test_results = dict()
-        for test_name in test_dict.keys():
-
-            pre_queries = test_dict[test_name]['pre_queries']
-            queries = test_dict[test_name]['queries']
-            post_queries = test_dict[test_name]['post_queries']
-            asserts = test_dict[test_name]['asserts']
-            cleanups = test_dict[test_name]['cleanups']
-
-            # INDEX STAGE
-            query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
-                                frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                i['indexes']['state'], i['indexes']['using'])
-                               for i in query_response['results']]
-
-            desired_indexes = [(index[0], index[1],
-                                frozenset([field.split()[0] for field in index[2]]), index[3], index[4])
-                               for index in test_dict[test_name]['indexes']]
-            desired_index_set = frozenset(desired_indexes)
-            current_index_set = frozenset(current_indexes)
-
-            # drop all unwanted indexes
-            if desired_index_set != current_index_set:
-                self.log.info("dropping extra indexes")
-                for current_index in current_indexes:
-                    if current_index not in desired_index_set:
-                        # drop index
-                        name = current_index[0]
-                        keyspace = current_index[1]
-                        using = current_index[4]
-                        self.log.info("dropping index: %s %s %s" % (keyspace, name, using))
-                        self.run_cbq_query("DROP INDEX %s.%s USING %s" % (keyspace, name, using))
-                        self._wait_for_index_drop(keyspace, name)
-                        self.log.info("dropped index: %s %s %s" % (keyspace, name, using))
-
-            query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
-                                                  frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                                  i['indexes']['state'], i['indexes']['using'])
-                                                 for i in query_response['results']]
-            current_index_set = frozenset(current_indexes)
-
-            if desired_index_set != current_index_set:
-                self.log.info("creating required indexes")
-                for desired_index in desired_index_set:
-                    if desired_index not in current_index_set:
-                        name = desired_index[0]
-                        keyspace = desired_index[1]
-                        fields = desired_index[2]
-                        joined_fields = ', '.join(fields)
-                        using = desired_index[4]
-                        self.log.info("creating index: %s %s %s" % (keyspace, name, using))
-                        self.run_cbq_query("CREATE INDEX %s ON %s(%s) USING %s" % (name, keyspace, joined_fields, using))
-                        self._wait_for_index_present(keyspace, name, fields, using)
-                        self.log.info("created index: %s %s %s" % (keyspace, name, using))
-
-            # at this point current indexes should = desired indexes
-
-            res_dict = dict()
-
-            # PRE_QUERIES STAGE
-            res_dict['pre_q_res'] = []
-            for func in pre_queries:
-                res = func(res_dict)
-                res_dict['pre_q_res'].append(res)
-
-            # QUERIES STAGE
-            res_dict['q_res'] = []
-            for query in queries:
-                res = self.run_cbq_query(query)
-                res_dict['q_res'].append(res)
-
-            # POST_QUERIES STAGE
-            res_dict['post_q_res'] = []
-            for func in post_queries:
-                res = func(res_dict)
-                res_dict['post_q_res'].append(res)
-
-            # ASSERT STAGE
-            res_dict['errors'] = []
-            for func in asserts:
-                try:
-                    res = func(res_dict)
-                except Exception as e:
-                    res_dict['errors'].append((test_name, e, traceback.format_exc(), res_dict))
-
-            # CLEANUP STAGE
-            res_dict['cleanup_res'] = []
-            for func in cleanups:
-                res = func(res_dict)
-                res_dict['cleanup_res'].append(res)
-
-            test_results[test_name] = res_dict
-
-        errors = [error for key in test_results.keys() for error in test_results[key]['errors']]
-        has_errors = False
-        if errors != []:
-            has_errors = True
-            self.log.info('There are %s errors: ' % (len(errors)))
-            for error in errors:
-                self.log.error('Error in query: ' + str(error[0]))
-                self.log.error(str(error[1]))
-                self.log.error(str(error[2]))
-
-            # trigger failure
-        self.assertEqual(has_errors, False)
 
     # This test is for composite index on different fields where it makes sure the query uses the particular asc/desc index
     # and results are compared against query run against primary index and static results generated and sorted manually.
@@ -209,7 +49,6 @@ class AscDescTests(QueryTests):
         query_7 = 'explain SELECT * FROM default WHERE join_yr > 10 and meta().id like "query-test%" ORDER BY join_yr asc,meta().id ASC LIMIT 10 OFFSET 2'
         query_8 = 'SELECT * FROM default WHERE join_yr > 10 and meta().id like "query-test%" ORDER BY meta().id,join_yr asc LIMIT 10 OFFSET 2'
         query_9 = 'SELECT * FROM default WHERE join_yr > 10 ORDER BY meta().id,join_yr DESC LIMIT 10'
-
 
         # post query defs
         explain_1 = lambda x: ExplainPlanHelper(x['q_res'][0])
