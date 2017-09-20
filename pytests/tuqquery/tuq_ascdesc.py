@@ -66,8 +66,12 @@ class AscDescTests(QueryTests):
 
         for bucket in self.buckets:
             bname = bucket.name
-            test_dict["1-%s" % (bname)] = {"indexes": [primary_index, index_1], "pre_queries": [], "queries": [query_1],
-                                           "post_queries": [explain_1], "asserts": [assert_1], "cleanups": []}
+            test_dict["1-%s" % (bname)] = {"indexes": [primary_index, index_1],
+                                           "pre_queries": [],
+                                           "queries": [query_1],
+                                           "post_queries": [explain_1],
+                                           "asserts": [assert_1],
+                                           "cleanups": []}
 
             test_dict["2-%s" % (bname)] = {"indexes": [primary_index, index_1], "pre_queries": [], "queries": [query_2],
                                            "post_queries": [], "asserts": [assert_2], "cleanups": []}

@@ -13,6 +13,7 @@ from membase.api.exception import CBQError, ReadDocumentException
 from membase.api.rest_client import RestConnection
 # from sdk_client import SDKClient
 from couchbase_helper.tuq_generators import TuqGenerators
+from couchbase_helper.documentgenerator import JSONNonDocGenerator
 
 JOIN_INNER = "INNER"
 JOIN_LEFT = "LEFT"
@@ -393,6 +394,7 @@ class QueryTests(BaseTestCase):
             # QUERIES STAGE
             res_dict['q_res'] = []
             for query in queries:
+                self.log.info('Running query: ' + query)
                 res = self.run_cbq_query(query)
                 res_dict['q_res'].append(res)
 
@@ -407,7 +409,9 @@ class QueryTests(BaseTestCase):
             for func in asserts:
                 try:
                     res = func(res_dict)
+                    self.log.info('Pass: ' + test_name)
                 except Exception as e:
+                    self.log.info('Fail: ' + test_name)
                     res_dict['errors'].append((test_name, e, traceback.format_exc(), res_dict))
 
             # CLEANUP STAGE
@@ -428,7 +432,7 @@ class QueryTests(BaseTestCase):
                 self.log.error(str(error[1]))
                 self.log.error(str(error[2]))
 
-                # trigger failure
+        # trigger failure
         self.assertEqual(has_errors, False)
 
     def ExplainPlanHelper(res):
@@ -1603,13 +1607,12 @@ class QueryTests(BaseTestCase):
                 if time.time() > end_time:
                     raise Exception("nothing")
             time.sleep(3)
-
 ##############################################################################################
 #
 #   tuq_nulls.py helpers
 ##############################################################################################
 
-    def generate_docs(self, name="tuq", start=0, end=0):
+    def generate_docs_nulls(self, name="tuq", start=0, end=0):
         if not end:
             end = self.num_items
         generators = []
@@ -1646,7 +1649,7 @@ class QueryTests(BaseTestCase):
 #   tuq_json_non_docs.py helpers
 ##############################################################################################
 
-    def generate_docs(self, values_type, name="tuq", start=0, end=0):
+    def generate_docs_json_non_docs(self, values_type, name="tuq", start=0, end=0):
         if end==0:
             end = self.num_items
         if values_type == 'string':
@@ -1682,8 +1685,8 @@ class QueryTests(BaseTestCase):
                 for task in item['tasks']:
                     if task and '_id' in task:
                         del task['_id']
-
-    def generate_docs(self, docs_per_day, start=0):
+    
+    def generate_docs_join(self, docs_per_day, start=0):
         generators = []
         types = ['Engineer', 'Sales', 'Support']
         join_yr = [2010, 2011]
@@ -1703,7 +1706,7 @@ class QueryTests(BaseTestCase):
                                                             [info], [tasks_ids],
                                                             start=start, end=docs_per_day))
         return generators
-
+    
     def generate_docs_tasks(self):
         generators = []
         start, end = 0, (28 + 1)
@@ -2075,14 +2078,14 @@ class QueryTests(BaseTestCase):
 #   tuq_base64.py helpers
 ##############################################################################################
 
-    def generate_docs(self, name="tuq", start=0, end=0):
+    def generate_docs_base64(self, name="tuq", start=0, end=0):
         if end==0:
             end = self.num_items
         values = ["Engineer", "Sales", "Support"]
         generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
         return generators
-
-    def _generate_full_docs_list(self, gens_load):
+    
+    def _generate_full_docs_list_base64(self, gens_load):
         all_docs_list = []
         for gen_load in gens_load:
             doc_gen = copy.deepcopy(gen_load)
@@ -2105,21 +2108,3 @@ class QueryTests(BaseTestCase):
 #
 #   tuq_index.py helpers
 ##############################################################################################
-
-
-                    ##############################################################################################
-                    #
-                    #   tuq_index.py helpers
-                    ##############################################################################################
-
-
-                    ##############################################################################################
-                    #
-                    #   tuq_index.py helpers
-                    ##############################################################################################
-
-
-                    ##############################################################################################
-                    #
-                    #   tuq_index.py helpers
-                    ##############################################################################################

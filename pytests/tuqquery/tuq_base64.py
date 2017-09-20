@@ -10,7 +10,7 @@ class Base64Tests(QueryTests):
     def setUp(self):
         self.skip_generation = True
         super(Base64Tests, self).setUp()
-        self.gens_load = self.generate_docs()
+        self.gens_load = self.generate_docs_base64()
         for bucket in self.buckets:
             self.cluster.bucket_flush(self.master, bucket=bucket,
                                   timeout=self.wait_timeout * 5)
@@ -33,7 +33,7 @@ class Base64Tests(QueryTests):
                 self.sleep(3)
                 actual_result = self.run_cbq_query()
                 actual_result = [doc["$1"] for doc in actual_result['results']]
-                expected_result = self._generate_full_docs_list(self.gens_load)
+                expected_result = self._generate_full_docs_list_base64(self.gens_load)
                 expected_result = [base64.b64encode(doc) for doc in expected_result]
                 self._verify_results(actual_result, expected_result)
             except Exception, ex:
