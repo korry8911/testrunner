@@ -9,13 +9,7 @@ class QueriesUpgradeTests(QueryTests, NewUpgradeBaseTest):
     def setUp(self):
         super(QueriesUpgradeTests, self).setUp()
         self.rest = None
-        if hasattr(self, 'shell'):
-           o = self.shell.execute_command("ps -aef| grep cbq-engine")
-           if len(o):
-               for cbq_engine in o[0]:
-                   if cbq_engine.find('grep') == -1:
-                       pid = [item for item in cbq_engine.split(' ') if item][1]
-                       self.shell.execute_command("kill -9 %s" % pid)
+        self._kill_all_processes_cbq()
 
     def suite_setUp(self):
         super(QueriesUpgradeTests, self).suite_setUp()
@@ -44,6 +38,7 @@ class QueriesUpgradeTests(QueryTests, NewUpgradeBaseTest):
         self.shell = RemoteMachineShellConnection(self.servers[1])
         o = self.shell.execute_command("ps -aef| grep cbq-engine")
         if len(o):
+            #Might be able to replace this with _kill_all_processes_cbq
             for cbq_engine in o[0]:
                 if cbq_engine.find('grep') == -1:
                     pid = [item for item in cbq_engine.split(' ') if item][1]
@@ -66,6 +61,7 @@ class QueriesUpgradeTests(QueryTests, NewUpgradeBaseTest):
         o = self.shell.execute_command("ps -aef| grep cbq-engine")
         if len(o):
             for cbq_engine in o[0]:
+                #Might be able to replace this with _kill_all_processes_cbq
                 if cbq_engine.find('grep') == -1:
                     pid = [item for item in cbq_engine.split(' ') if item][1]
                     self.shell.execute_command("kill -9 %s" % pid)

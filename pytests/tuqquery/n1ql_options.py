@@ -339,36 +339,3 @@ class OptionsRestTests(QueryTests):
 
 
 
-    def curl_helper(self,statement):
-         shell = RemoteMachineShellConnection(self.master)
-         cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement={3}'".\
-                format('Administrator', 'password', self.master.ip,statement ,self.curl_path)
-         output, error = shell.execute_command(cmd)
-         new_list = [string.strip() for string in output]
-         concat_string = ''.join(new_list)
-         json_output=json.loads(concat_string)
-         return json_output
-
-    def prepare_helper(self,statement):
-         shell = RemoteMachineShellConnection(self.master)
-         cmd = '{4} -u {0}:{1} http://{2}:8093/query/service -d \'prepared="{3}"&$type="Engineer"&$name="employee-4"\''.\
-                format('Administrator', 'password', self.master.ip,statement ,self.curl_path)
-         output, error = shell.execute_command(cmd)
-         new_list = [string.strip() for string in output]
-         concat_string = ''.join(new_list)
-         json_output=json.loads(concat_string)
-         return json_output
-
-    def prepare_helper2(self,statement):
-         shell = RemoteMachineShellConnection(self.master)
-         cmd = '{4} -u {0}:{1} http://{2}:8093/query/service -d \'prepared="{3}"&args=["Engineer","employee-4"]\''.\
-                format('Administrator', 'password', self.master.ip,statement ,self.curl_path)
-         output, error = shell.execute_command(cmd)
-         new_list = [string.strip() for string in output]
-         concat_string = ''.join(new_list)
-         json_output=json.loads(concat_string)
-         return json_output
-
-
-
-

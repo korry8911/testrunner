@@ -223,6 +223,7 @@ class QueryProfilingTests(QueryMonitoringTests):
         result = self.run_cbq_query('select * from system:completed_requests')
         self.log.info(json.dumps(result, sort_keys=True, indent=3))
 
+
     def run_parallel_query(self, server):
         logging.info('parallel query is active')
         query = 'select * from default'
