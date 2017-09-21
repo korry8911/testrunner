@@ -763,7 +763,6 @@ class QueryTests(BaseTestCase):
             shell_connection = RemoteMachineShellConnection(self.master)
             shell_connection.execute_command(cmd)
 
-
     def load_directory(self, generators_load):
         gens_load = []
         for generator_load in generators_load:
@@ -797,14 +796,17 @@ class QueryTests(BaseTestCase):
         self.sleep(30, 'Sleep for some time prior to index creation')
         rest = RestConnection(self.master)
         versions = rest.get_nodes_versions()
+
         if versions[0].startswith("4") or versions[0].startswith("3") or versions[0].startswith("5"):
             for bucket in self.buckets:
+
                 if self.primary_indx_drop:
                     self.log.info("Dropping primary index for %s ..." % bucket.name)
                     self.query = "DROP PRIMARY INDEX ON %s using %s" % (bucket.name,self.primary_indx_type)
                     self.sleep(3, 'Sleep for some time after index drop')
                 self.query = "select * from system:indexes where name='#primary' and keyspace_id = %s" % bucket.name
                 res = self.run_cbq_query(self.query)
+
                 if (res['metrics']['resultCount'] == 0):
                     self.query = "CREATE PRIMARY INDEX ON %s USING %s" % (bucket.name, self.primary_indx_type)
                     self.log.info("Creating primary index for %s ..." % bucket.name)
@@ -893,158 +895,95 @@ class QueryTests(BaseTestCase):
 ##############################################################################################
 
     def query_select_insert_update_delete_helper(self):
-        self.create_users(users=[{'id': 'john_insert',
-                                  'name': 'johnInsert',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_update',
-                                  'name': 'johnUpdate',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_delete',
-                                  'name': 'johnDelete',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_select',
-                                  'name': 'johnSelect',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_select2',
-                                  'name': 'johnSelect2',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_rep',
-                                  'name': 'johnRep',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_bucket_admin',
-                                  'name': 'johnBucketAdmin',
-                                  'password':'password'}])
+        self.create_users(users=[{'id': 'john_insert', 'name': 'johnInsert', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_update', 'name': 'johnUpdate', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_delete', 'name': 'johnDelete', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_select', 'name': 'johnSelect', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_select2', 'name': 'johnSelect2', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_rep', 'name': 'johnRep', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_bucket_admin', 'name': 'johnBucketAdmin', 'password':'password'}])
         for bucket in self.buckets:
-            self.query = "GRANT {0} on {2} to {1}".format("query_insert",'john_insert',bucket.name)
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-            self.query = "GRANT {0} on {2} to {1}".format("query_update",'john_update',bucket.name)
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-            self.query = "GRANT {0} on {2} to {1}".format("query_delete",'john_delete',bucket.name)
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-            self.query = "GRANT {0} on {2} to {1}".format("query_select",'john_select',bucket.name)
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-            self.query = "GRANT {0} on {2} to {1}".format("bucket_admin",'john_bucket_admin',bucket.name)
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
+            for item in [("query_insert",'john_insert'), ("query_update",'john_update'), ("query_delete",'john_delete'),
+                         ("query_select",'john_select'), ("bucket_admin",'john_bucket_admin'), ("query_select",'john_select2')]
+                self.query = "GRANT {0} on {2} to {1}".format(item[0],item[1],bucket.name)
+                self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
+
             self.query = "GRANT {0} to {1}".format("replication_admin",'john_rep')
             self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-            self.query = "GRANT {0} on {2} to {1}".format("query_select",'john_select2',bucket.name)
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
+
 
     def query_select_insert_update_delete_helper_default(self):
-        self.create_users(users=[{'id': 'john_insert',
-                                  'name': 'johnInsert',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_update',
-                                  'name': 'johnUpdate',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_delete',
-                                  'name': 'johnDelete',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_select',
-                                  'name': 'johnSelect',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_select2',
-                                  'name': 'johnSelect2',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_rep',
-                                  'name': 'johnRep',
-                                  'password':'password'}])
-        self.create_users(users=[{'id': 'john_bucket_admin',
-                                  'name': 'johnBucketAdmin',
-                                  'password':'password'}])
+        self.create_users(users=[{'id': 'john_insert', 'name': 'johnInsert', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_update', 'name': 'johnUpdate', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_delete', 'name': 'johnDelete', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_select', 'name': 'johnSelect', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_select2', 'name': 'johnSelect2', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_rep', 'name': 'johnRep', 'password':'password'}])
+        self.create_users(users=[{'id': 'john_bucket_admin', 'name': 'johnBucketAdmin', 'password':'password'}])
         self.query = "GRANT {0} to {1}".format("replication_admin",'john_rep')
         self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
+
+    def change_and_update_permission(self, query_type, permission, user, bucket, cmd, error_msg):
+        if query_type == 'with_bucket':
+            self.query = "GRANT {0} on {1} to {2}".format(permission, bucket, user)
+        if query_type == 'without_bucket':
+            self.query = "GRANT {0} to {1}".format(permission,user)
+        if query_type in ['with_bucket', 'without_bucket']:
+            self.n1ql_helper.run_cbq_query(query=self.query, server=self.n1ql_node)
+        output, error = self.shell.execute_command(cmd)
+        self.shell.log_command_output(output, error)
+        self.assertTrue(any("success" in line for line in output), error_msg.format(bucket, user))
+        self.log.info("Query executed successfully")
 
     def check_permissions_helper(self):
         for bucket in self.buckets:
             cmd = "%s -u %s:%s http://%s:8093/query/service -d " \
                   "'statement=INSERT INTO %s (KEY, VALUE) VALUES(\"test\", { \"value1\": \"one1\" })'"% \
                   (self.curl_path,'john_insert', 'password', self.master.ip, bucket.name)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to insert into {0} as user {1}".
-                            format(bucket.name, 'johnInsert'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission(None, None, 'johnInsert', bucket.name, cmd, "Unable to insert into {0} as user {1}")
+
             old_name = "employee-14"
             new_name = "employee-14-2"
             cmd = "{6} -u {0}:{1} http://{2}:8093/query/service -d " \
                   "'statement=UPDATE {3} a set name = '{4}' where name = '{5}' limit 1'". \
                 format('john_update', 'password', self.master.ip, bucket.name, new_name, old_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to update into {0} as user {1}".
-                            format(bucket.name, 'johnUpdate'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission(None, None, 'johnUpdate', bucket.name, cmd, "Unable to update into {0} as user {1}")
+
             del_name = "employee-14"
             cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d " \
                   "'statement=DELETE FROM {3} a WHERE name = '{4}''". \
                 format('john_delete', 'password', self.master.ip, bucket.name, del_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to delete from {0} as user {1}".
-                            format(bucket.name, 'john_delete'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission(None, None, 'john_delete', bucket.name, cmd, "Unable to delete from {0} as user {1}")
+
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} LIMIT 10'". \
                 format('john_select2', 'password', self.master.ip,bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_select2'))
+            self.change_and_update_permission(None, None, 'john_select2', bucket.name, cmd, "Unable to select from {0} as user {1}")
 
     def create_and_verify_system_catalog_users_helper(self):
-        self.create_users(users=[{'id': 'john_system',
-                                  'name': 'john',
-                                  'password':'password'}])
+        self.create_users(users=[{'id': 'john_system', 'name': 'john', 'password':'password'}])
         self.query = "GRANT {0} to {1}".format("query_system_catalog",'john_system')
         self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
+
         for bucket in self.buckets:
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:keyspaces'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:namespaces'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:datastores'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:indexes'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:completed_requests'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:active_requests'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:prepareds'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
-            cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:my_user_info'". \
-                format('john_system','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_system'))
+            cmds = ["{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:keyspaces'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path),
+                    "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:namespaces'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path),
+                    "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:datastores'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path),
+                    "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:indexes'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path),
+                    "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:completed_requests'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path),
+                    "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:active_requests'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path),
+                    "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:prepareds'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path),
+                    "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:my_user_info'". \
+                        format('john_system','password', self.master.ip, bucket.name,self.curl_path)]
+            for cmd in cmds:
+                self.change_and_update_permission(None, None, 'john_system', bucket.name, cmd, "Unable to select from {0} as user {1}")
+
 
     def check_system_catalog_helper(self):
         """
@@ -1055,45 +994,34 @@ class QueryTests(BaseTestCase):
         self.system_catalog_helper_delete_for_upgrade()
         self.system_catalog_helper_select_for_upgrade()
 
+    def query_assert_success(self, query):
+        self.query = query
+        res = self.run_cbq_query(query=self.query)
+        self.assertEqual(res['status'], 'success')
+
     def system_catalog_helper_select_for_upgrade(self):
-        query = 'select * from system:datastores'
-        res = self.run_cbq_query()
-        self.assertEqual(res['status'],'success')
-        self.query = 'select * from system:namespaces'
-        res = self.run_cbq_query(query=query)
-        self.assertEqual(res['status'],'success')
-        self.query = 'select * from system:keyspaces'
-        res = self.run_cbq_query(query=query)
-        self.assertEqual(res['status'],'success')
+        for query in ['select * from system:datastores', 'select * from system:namespaces',
+                      'select * from system:keyspaces']:
+            self.query_assert_success(query)
+
         self.query = 'create index idx1 on {0}(name)'.format(self.buckets[0].name)
         res = self.run_cbq_query(query=query)
         self.sleep(10)
-        self.query = 'select * from system:indexes'
-        res = self.run_cbq_query(query=query)
-        self.assertEqual(res['status'],'success')
-        self.query = 'select * from system:dual'
-        res = self.run_cbq_query(query=query)
-        self.assertEqual(res['status'],'success')
-        self.query = "prepare st1 from select * from {0} union select * from {0} union select * from {0}".format(self.buckets[0].name)
-        res = self.run_cbq_query(query=query)
-        self.assertEqual(res['status'],'success')
-        self.query = 'execute st1'
-        res = self.run_cbq_query(query=query)
-        self.assertEqual(res['status'],'success')
+
+        for query in ['select * from system:indexes', 'select * from system:dual',
+                      "prepare st1 from select * from {0} union select * from {0} union select * from {0}".format(self.buckets[0].name),
+                      'execute st1']:
+            self.query_assert_success(query)
 
     def system_catalog_helper_delete_for_upgrade(self):
-        self.queries = ['delete from system:datastores',
-                        'delete from system:namespaces',
-                        'delete from system:keyspaces',
-                        'delete from system:indexes',
-                        'delete from system:user_info',
-                        'delete from system:nodes',
+        self.queries = ['delete from system:datastores', 'delete from system:namespaces', 'delete from system:keyspaces',
+                        'delete from system:indexes', 'delete from system:user_info', 'delete from system:nodes',
                         'delete from system:applicable_roles']
         for query in self.queries:
             try:
                 self.run_cbq_query(query=query)
             except Exception, ex:
-                log.error(ex)
+                self.log.error(ex)
                 self.assertNotEqual(str(ex).find("'code': 11003"), -1)
         try:
             query = 'delete from system:dual'
@@ -1102,15 +1030,13 @@ class QueryTests(BaseTestCase):
             self.log.error(ex)
             self.assertNotEqual(str(ex).find("'code': 11000"), -1)
 
-        queries = ['delete from system:completed_requests',
-                   'delete from system:active_requests where state!="running"',
+        queries = ['delete from system:completed_requests', 'delete from system:active_requests where state!="running"',
                    'delete from system:prepareds']
         for query in queries:
             res = self.run_cbq_query(query=query)
             self.assertEqual(res['status'], 'success')
 
-        queries = ['select * from system:completed_requests',
-                   'select * from system:active_requests',
+        queries = ['select * from system:completed_requests', 'select * from system:active_requests',
                    'select * from system:prepareds']
         for query in queries:
             res = self.run_cbq_query(query=query)
@@ -1119,54 +1045,38 @@ class QueryTests(BaseTestCase):
     def change_and_verify_pre_upgrade_ldap_users_permissions(self):
         for bucket in self.buckets:
             # change permission of john_bucketadmin1 and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_select",bucket.name,'bucket0')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} limit 1'". \
                 format('bucket0', 'password', self.master.ip,bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'bucket0'))
+            self.change_and_update_permission('with_bucket', "query_select", 'bucket0', bucket.name, cmd,
+                                              "Unable to select from {0} as user {1}")
 
             # change permission of john_bucketadminAll and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_insert",bucket.name,'bucket0')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-            cmd = "%s -u %s:%s http://%s:8093/query/service -d 'statement=INSERT INTO %s (KEY, VALUE) VALUES(\"1\", { \"value1\": \"one1\" })'" %(self.curl_path,'bucket0', 'password',self.master.ip,bucket.name)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to insert into {0} as user {1}".
-                            format(bucket.name, 'bucket0'))
+            cmd = "%s -u %s:%s http://%s:8093/query/service -d 'statement=INSERT INTO %s (KEY, VALUE) VALUES(\"1\", { \"value1\": \"one1\" })'" \
+                  % (self.curl_path,'bucket0', 'password',self.master.ip,bucket.name)
+            self.change_and_update_permission('with_bucket', "query_insert", 'bucket0', bucket.name, cmd,
+                                              "Unable to insert into {0} as user {1}")
 
             # change permission of cluster_user and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_update",bucket.name,'bucket0')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             old_name = "employee-14"
             new_name = "employee-14-2"
             cmd = "{6} -u {0}:{1} http://{2}:8093/query/service -d 'statement=UPDATE {3} a set name = '{4}' where " \
-                  "name = '{5}' limit 1'".format('bucket0', 'password',self.master.ip,bucket.name,new_name, old_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to update  {0} as user {1}".
-                            format(bucket.name, 'bucket0'))
+                  "name = '{5}' limit 1'".format('bucket0', 'password',self.master.ip,bucket.name,new_name,
+                                                 old_name,self.curl_path)
+            self.change_and_update_permission('with_bucket', "query_update", 'bucket0', bucket.name, cmd,
+                                              "Unable to update  {0} as user {1}")
+
             #change permission of bucket0 and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_delete",bucket.name,'bucket0')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             del_name = "employee-14"
-            cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d " \
-                  "'statement=DELETE FROM {3} a WHERE name = '{4}''". \
+            cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d 'statement=DELETE FROM {3} a WHERE name = '{4}''". \
                 format('bucket0', 'password', self.master.ip, bucket.name, del_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to delete from {0} as user {1}".
-                            format(bucket.name, 'bucket0'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission('with_bucket', "query_delete", 'bucket0', bucket.name, cmd,
+                                              "Unable to delete from {0} as user {1}")
 
             # change permission of cbadminbucket user and verify its able to execute the correct query.
-            self.query = "GRANT {0} to {1}".format("query_system_catalog",'cbadminbucket')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:keyspaces'". \
                 format('cbadminbucket','password', self.master.ip, bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from system:keyspaces as user {0}".format('cbadminbucket'))
-
+            self.change_and_update_permission('without_bucket', "query_system_catalog", 'cbadminbucket',
+                                              'cbadminbucket', cmd, "Unable to select from system:keyspaces as user {0}")
 
     def create_ldap_auth_helper(self):
         """
@@ -1186,14 +1096,12 @@ class QueryTests(BaseTestCase):
                     {'id': 'cadmin', 'name': 'cadmin','roles': 'admin'}]
         RbacBase().add_user_role(rolelist, RestConnection(self.master), 'ldap')
 
-
     def verify_pre_upgrade_users_permissions_helper(self,test = ''):
+
         cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} LIMIT 10'". \
             format('bucket0', 'password', self.master.ip,'bucket0',self.curl_path)
-        output, error = self.shell.execute_command(cmd)
-        self.shell.log_command_output(output, error)
-        self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                        format('bucket0', 'bucket0'))
+        self.change_and_update_permission(None, None, 'bucket0', 'bucket0', cmd, "Unable to select from {0} as user {1}")
+
         if test == 'online_upgrade':
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} LIMIT 10'". \
                 format('cbadminbucket', 'password', self.master.ip,'default',self.curl_path)
@@ -1201,147 +1109,100 @@ class QueryTests(BaseTestCase):
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} LIMIT 10'". \
                 format('cbadminbucket', 'password', self.master.ip,'bucket0',self.curl_path)
 
-        output, error = self.shell.execute_command(cmd)
-        self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                        format('bucket0', 'cbadminbucket'))
+        self.change_and_update_permission(None, None, 'cbadminbucket', 'bucket0', cmd, "Unable to select from {0} as user {1}")
+
         cmd = "{3} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:keyspaces'". \
             format('cbadminbucket', 'password', self.master.ip,self.curl_path)
-        output, error = self.shell.execute_command(cmd)
-        self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                        format('system:keyspaces', 'cbadminbucket'))
+        self.change_and_update_permission(None, None, 'cbadminbucket', 'system:keyspaces', cmd, "Unable to select from {0} as user {1}")
 
         for bucket in self.buckets:
             cmd = "%s -u %s:%s http://%s:8093/query/service -d " \
                   "'statement=INSERT INTO %s (KEY, VALUE) VALUES(\"5\", { \"value1\": \"one1\" })'"% \
                   (self.curl_path,'bucket0', 'password', self.master.ip, bucket.name)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to insert into {0} as user {1}".
-                            format(bucket.name, 'bucket0'))
-            log.info("Query executed successfully")
+
+            self.change_and_update_permission(None, None, 'bucket0', bucket.name, cmd, "Unable to insert into {0} as user {1}")
+
             old_name = "employee-14"
             new_name = "employee-14-2"
             cmd = "{6} -u {0}:{1} http://{2}:8093/query/service -d " \
                   "'statement=UPDATE {3} a set name = '{4}' where name = '{5}' limit 1'". \
                 format('bucket0', 'password', self.master.ip, bucket.name, new_name, old_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to update into {0} as user {1}".
-                            format(bucket.name, 'bucket0'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission(None, None, 'bucket0', bucket.name, cmd, "Unable to update into {0} as user {1}")
+
             del_name = "employee-14"
-            cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d " \
-                  "'statement=DELETE FROM {3} a WHERE name = '{4}''". \
+            cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d 'statement=DELETE FROM {3} a WHERE name = '{4}''". \
                 format('bucket0', 'password', self.master.ip, bucket.name, del_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to delete from {0} as user {1}".
-                            format(bucket.name, 'bucket0'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission(None, None, 'bucket0', bucket.name, cmd, "Unable to delete from {0} as user {1}")
 
     def use_pre_upgrade_users_post_upgrade(self):
         for bucket in self.buckets:
             cmd = "%s -u %s:%s http://%s:8093/query/service -d " \
                   "'statement=INSERT INTO %s (KEY, VALUE) VALUES(\"test2\", { \"value1\": \"one1\" })'"% \
                   (self.curl_path,'cbadminbucket', 'password', self.master.ip, bucket.name)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to insert into {0} as user {1}".
-                            format(bucket.name, 'johnInsert'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission(None, None, 'johnInsert', bucket.name, cmd, "Unable to insert into {0} as user {1}")
+
             old_name = "employee-14"
             new_name = "employee-14-2"
             cmd = "{6} -u {0}:{1} http://{2}:8093/query/service -d " \
                   "'statement=UPDATE {3} a set name = '{4}' where name = '{5}' limit 1'". \
                 format('cbadminbucket', 'password', self.master.ip, bucket.name, new_name, old_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to update into {0} as user {1}".
-                            format(bucket.name, 'johnUpdate'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission(None, None, 'johnUpdate', bucket.name, cmd, "Unable to update into {0} as user {1}")
+
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} LIMIT 10'". \
                 format(bucket.name, 'password', self.master.ip,bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, bucket.name))
-
+            self.change_and_update_permission(None, None, bucket.name, bucket.name, cmd, "Unable to select from {0} as user {1}")
 
     def change_permissions_and_verify_pre_upgrade_users(self):
         for bucket in self.buckets:
             # change permission of john_cluster and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_select",bucket.name,bucket.name)
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} limit 1'". \
-                format(bucket.name, 'password', self.master.ip,bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, bucket.name))
+                format(bucket.name, 'password', self.master.ip, bucket.name, self.curl_path)
+            self.change_and_update_permission('with_bucket', "query_select", bucket.name,
+                                              bucket.name, cmd, "Unable to select from {0} as user {1}")
 
             # change permission of ro_non_ldap and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_update",bucket.name,'cbadminbucket')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             old_name = "employee-14"
             new_name = "employee-14-2"
             cmd = "{6} -u {0}:{1} http://{2}:8093/query/service -d 'statement=UPDATE {3} a set name = '{4}' where " \
                   "name = '{5}' limit 1'".format('cbadminbucket', 'readonlypassword',self.master.ip,bucket.name,new_name, old_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to update  {0} as user {1}".
-                            format(bucket.name, 'cbadminbucket'))
+            self.change_and_update_permission('with_bucket', "query_update", 'cbadminbucket',
+                                              bucket.name, cmd, "Unable to update  {0} as user {1}")
 
             # change permission of john_admin and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_delete",bucket.name,'cbadminbucket')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             del_name = "employee-14"
             cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d " \
                   "'statement=DELETE FROM {3} a WHERE name = '{4}''". \
                 format('cbadminbucket', 'password', self.master.ip, bucket.name, del_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to delete from {0} as user {1}".
-                            format(bucket.name, 'cbadminbucket'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission('with_bucket', "query_delete", 'cbadminbucket',
+                                              bucket.name, cmd, "Unable to update  {0} as user {1}")
+
             # change permission of bob user and verify its able to execute the correct query.
-            self.query = "GRANT {0} to {1}".format("query_system_catalog","cbadminbucket")
-            self.run_cbq_query(query = self.query)
-            cmd = "{3} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:keyspaces'". \
-                format('cbadminbucket','password', self.master.ip, self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from system:keyspaces as user {0}".
-                            format('cbadminbucket'))
+
+            self.change_and_update_permission('without_bucket', "query_system_catalog", 'cbadminbucket',
+                                              bucket.name, cmd, "Unable to select from system:keyspaces as user {1}")
 
     def change_permissions_and_verify_new_users(self):
         for bucket in self.buckets:
             # change permission of john_insert and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("bucket_admin",bucket.name,'john_insert')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} limit 1'". \
-                format('john_insert', 'password', self.master.ip,bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_insert'))
+                format('john_insert', 'password', self.master.ip, bucket.name, self.curl_path)
+            self.change_and_update_permission('with_bucket', "bucket_admin", 'john_insert',
+                                              bucket.name, cmd, "Unable to select from {0} as user {1}")
 
             # change permission of john_update and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_insert",bucket.name,'john_update')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=INSERT INTO {3} values(\"k055\", 123  )' " \
                 .format('john_update', 'password',self.master.ip,bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to insert into {0} as user {1}".
-                            format(bucket.name, 'john_update'))
+            self.change_and_update_permission('with_bucket', "query_insert", 'john_update',
+                                              bucket.name, cmd, "Unable to insert into {0} as user {1}")
 
             # change permission of john_select and verify its able to execute the correct query.
-            self.query = "GRANT {0} to {1}".format("cluster_admin",'john_select')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             old_name = "employee-14"
             new_name = "employee-14-2"
             cmd = "{6} -u {0}:{1} http://{2}:8093/query/service -d 'statement=UPDATE {3} a set name = '{4}' where " \
-                  "name = '{5}' limit 1'".format('john_select', 'password',self.master.ip,bucket.name,new_name, old_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to update  {0} as user {1}".
-                            format(bucket.name, 'john_select'))
-
+                  "name = '{5}' limit 1'".format('john_select', 'password', self.master.ip, bucket.name, new_name,
+                                                 old_name, self.curl_path)
+            self.change_and_update_permission('without_bucket', "cluster_admin", 'john_select',
+                                              bucket.name, cmd, "Unable to update  {0} as user {1}")
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} limit 1'". \
                 format('john_select', 'password', self.master.ip,bucket.name,self.curl_path)
             output, error = self.shell.execute_command(cmd)
@@ -1349,29 +1210,16 @@ class QueryTests(BaseTestCase):
                             format(bucket.name, 'john_select'))
 
             # change permission of john_select2 and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_delete",bucket.name,'john_select2')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-            del_name = "employee-14"
-            cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d " \
-                  "'statement=DELETE FROM {3} a WHERE name = '{4}''". \
+            cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d 'statement=DELETE FROM {3} a WHERE name = '{4}''". \
                 format('john_select2', 'password', self.master.ip, bucket.name, del_name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.shell.log_command_output(output, error)
-            self.assertTrue(any("success" in line for line in output), "Unable to delete from {0} as user {1}".
-                            format(bucket.name, 'john_select2'))
-            log.info("Query executed successfully")
+            self.change_and_update_permission('with_bucket', "query_delete", 'john_select2',
+                                              bucket.name, cmd, "Unable to delete from {0} as user {1}")
 
             # change permission of john_delete and verify its able to execute the correct query.
-            self.query = "GRANT {0} on {1} to {2}".format("query_select",bucket.name,'john_delete')
-            self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
             cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from {3} limit 1'". \
                 format('john_delete', 'password', self.master.ip,bucket.name,self.curl_path)
-            output, error = self.shell.execute_command(cmd)
-            self.assertTrue(any("success" in line for line in output), "Unable to select from {0} as user {1}".
-                            format(bucket.name, 'john_delete'))
-
-########################################################################################################################
-        # refactored everything below this comment
+            self.change_and_update_permission('with_bucket', "query_select", 'john_delete',
+                                              bucket.name, cmd, "Unable to select from {0} as user {1}")
 
     def create_users(self, users=None):
         """
@@ -1382,34 +1230,24 @@ class QueryTests(BaseTestCase):
         if not users:
             users = self.users
         RbacBase().create_user_source(users, 'builtin', self.master)
-        log.info("SUCCESS: User(s) %s created" % ','.join([user['name'] for user in users]))
+        self.log.info("SUCCESS: User(s) %s created" % ','.join([user['name'] for user in users]))
 
     def create_users_before_upgrade_non_ldap(self):
         """
         password needs to be added statically for these users
         on the specific machine where ldap is enabled.
         """
-        log.info("create a read only user account")
-        cli_cmd = "{0}couchbase-cli -c {1}:8091 -u Administrator " \
-                  "-p password".format(self.path, self.master.ip)
-        ro_set_cmd = cli_cmd + " user-manage --set --ro-username=ro_non_ldap --ro-password=readonlypassword"
-        self.shell.execute_command(ro_set_cmd)
+        cli_cmd = "{0}couchbase-cli -c {1}:8091 -u Administrator -p password".format(self.path, self.master.ip)
 
-        log.info("create a bucket admin on bucket0 user account")
-        bucket0_admin_cmd = cli_cmd + " admin-role-manage --set-users=bob --set-names=Bob --roles=bucket_admin[bucket0]"
-        self.shell.execute_command(bucket0_admin_cmd)
+        cmds = [("create a read only user account", cli_cmd+" user-manage --set --ro-username=ro_non_ldap --ro-password=readonlypassword"),
+                ("create a bucket admin on bucket0 user account", cli_cmd+" admin-role-manage --set-users=bob --set-names=Bob --roles=bucket_admin[bucket0]"),
+                ("create a bucket admin on all buckets user account", cli_cmd+" admin-role-manage --set-users=mary --set-names=Mary --roles=bucket_admin[*]"),
+                ("create a cluster admin user account", cli_cmd+"admin-role-manage --set-users=john_cluster --set-names=john_cluster --roles=cluster_admin"),
+                ("create a admin user account", cli_cmd+" admin-role-manage --set-users=john_admin --set-names=john_admin --roles=admin")]
 
-        log.info("create a bucket admin on all buckets user account")
-        all_bucket_admin_cmd = cli_cmd + " admin-role-manage --set-users=mary --set-names=Mary --roles=bucket_admin[*]"
-        self.shell.execute_command(all_bucket_admin_cmd)
-
-        log.info("create a cluster admin user account")
-        cluster_admin_cmd = cli_cmd + "admin-role-manage --set-users=john_cluster --set-names=john_cluster --roles=cluster_admin"
-        self.shell.execute_command(cluster_admin_cmd)
-
-        log.info("create a admin user account")
-        admin_user_cmd = cli_cmd + " admin-role-manage --set-users=john_admin --set-names=john_admin --roles=admin"
-        self.shell.execute_command(admin_user_cmd)
+        for cmd in cmds:
+            self.log.info(cmd[0])
+            self.shell.execute_command(cmd[1])
 
         users = [{'id': 'Bob', 'name': 'Bob', 'password': 'password', 'roles': 'admin'},
                  {'id': 'mary', 'name': 'Mary', 'password': 'password', 'roles': 'cluster_admin'},
@@ -1438,82 +1276,86 @@ class QueryTests(BaseTestCase):
         self.nodes_upgrade_path = self.input.param("nodes_upgrade_path", "").split("-")
         for service in self.nodes_upgrade_path:
             nodes = self.get_nodes_from_services_map(service_type=service, get_all_nodes=True)
-            log.info("----- Upgrading all {0} nodes -----".format(service))
+
+            self.log.info("----- Upgrading all {0} nodes -----".format(service))
             for node in nodes:
                 node_rest = RestConnection(node)
                 node_info = "{0}:{1}".format(node.ip, node.port)
                 node_services_list = node_rest.get_nodes_services()[node_info]
                 node_services = [",".join(node_services_list)]
+
                 if "n1ql" in node_services_list:
-                    n1ql_nodes = self.get_nodes_from_services_map(service_type="n1ql",
-                                                                  get_all_nodes=True)
+                    n1ql_nodes = self.get_nodes_from_services_map(service_type="n1ql", get_all_nodes=True)
                     if len(n1ql_nodes) > 1:
                         for n1ql_node in n1ql_nodes:
                             if node.ip != n1ql_node.ip:
                                 self.n1ql_node = n1ql_node
                                 break
-                log.info("Rebalancing the node out...")
+
+                self.log.info("Rebalancing the node out...")
                 rebalance = self.cluster.async_rebalance(self.servers[:self.nodes_init],[], [node])
                 rebalance.result()
                 active_nodes = []
                 for active_node in self.servers:
                     if active_node.ip != node.ip:
                         active_nodes.append(active_node)
-                log.info("Upgrading the node...")
+
+                self.log.info("Upgrading the node...")
                 upgrade_th = self._async_update(self.upgrade_to, [node])
                 for th in upgrade_th:
                     th.join()
-                log.info("==== Upgrade Complete ====")
-                log.info("Adding node back to cluster...")
-                rebalance = self.cluster.async_rebalance(active_nodes,
-                                                         [node], [],
-                                                         services=node_services)
+
+                self.log.info("==== Upgrade Complete ====")
+                self.log.info("Adding node back to cluster...")
+                rebalance = self.cluster.async_rebalance(active_nodes, [node], [], services=node_services)
                 rebalance.result()
                 self.sleep(60)
                 node_version = RestConnection(node).get_nodes_versions()
-                log.info("{0} node {1} Upgraded to: {2}".format(service, node.ip, node_version))
+                self.log.info("{0} node {1} Upgraded to: {2}".format(service, node.ip, node_version))
 
     def _perform_online_upgrade_with_failover(self):
         self.nodes_upgrade_path = self.input.param("nodes_upgrade_path", "").split("-")
         for service in self.nodes_upgrade_path:
             nodes = self.get_nodes_from_services_map(service_type=service, get_all_nodes=True)
-            log.info("----- Upgrading all {0} nodes -----".format(service))
+
+            self.log.info("----- Upgrading all {0} nodes -----".format(service))
             for node in nodes:
                 node_rest = RestConnection(node)
                 node_info = "{0}:{1}".format(node.ip, node.port)
                 node_services_list = node_rest.get_nodes_services()[node_info]
                 node_services = [",".join(node_services_list)]
-                log.info("Rebalancing the node out...")
-                failover_task = self.cluster.async_failover([self.master],
-                                                            failover_nodes=[node],
-                                                            graceful=False)
+
+                self.log.info("Rebalancing the node out...")
+                failover_task = self.cluster.async_failover([self.master], failover_nodes=[node], graceful=False)
                 failover_task.result()
                 active_nodes = []
                 for active_node in self.servers:
                     if active_node.ip != node.ip:
                         active_nodes.append(active_node)
-                log.info("Upgrading the node...")
+
+                self.log.info("Upgrading the node...")
                 upgrade_th = self._async_update(self.upgrade_to, [node])
                 for th in upgrade_th:
                     th.join()
-                log.info("==== Upgrade Complete ====")
+
+                self.log.info("==== Upgrade Complete ====")
                 self.sleep(30)
-                log.info("Adding node back to cluster...")
+
+                self.log.info("Adding node back to cluster...")
                 rest = RestConnection(self.master)
                 nodes_all = rest.node_statuses()
                 for cluster_node in nodes_all:
                     if cluster_node.ip == node.ip:
-                        log.info("Adding Back: {0}".format(node))
+                        self.log.info("Adding Back: {0}".format(node))
                         rest.add_back_node(cluster_node.id)
-                        rest.set_recovery_type(otpNode=cluster_node.id,
-                                               recoveryType="full")
-                log.info("Adding node back to cluster...")
+                        rest.set_recovery_type(otpNode=cluster_node.id, recoveryType="full")
+
+                self.log.info("Adding node back to cluster...")
                 rebalance = self.cluster.async_rebalance(active_nodes, [], [])
                 rebalance.result()
                 self.sleep(60)
                 node_version = RestConnection(node).get_nodes_versions()
-                log.info("{0} node {1} Upgraded to: {2}".format(service, node.ip,
-                                                                node_version))
+                self.log.info("{0} node {1} Upgraded to: {2}".format(service, node.ip, node_version))
 ##############################################################################################
 #
 # n1ql_rbac_2.py helpers
@@ -2016,7 +1858,7 @@ class QueryTests(BaseTestCase):
                 else:
                     main_command = main_command + " -f=" + filename
 
-        log.info("running command on {0}: {1}".format(self.master.ip, main_command))
+        self.log.info("running command on {0}: {1}".format(self.master.ip, main_command))
         output = ""
         if shell.remote:
             stdin, stdout, stderro = shell._ssh_client.exec_command(main_command)
@@ -2727,4 +2569,3 @@ class QueryTests(BaseTestCase):
         self.assertTrue(sorted(actual_result) == sorted(expected_result),
                         msg % (actual_result[:100],actual_result[-100:],
                                expected_result[:100],expected_result[-100:]))
-
