@@ -1,5 +1,4 @@
 import logging
-
 from couchbase_helper.documentgenerator import BlobGenerator
 from couchbase_helper.tuq_helper import N1QLHelper
 from membase.api.rest_client import RestConnection
@@ -7,7 +6,6 @@ from newupgradebasetest import NewUpgradeBaseTest
 from pytests.security.rbac_base import RbacBase
 from pytests.tuqquery.n1ql_rbac_2 import RbacN1QL
 from remote.remote_util import RemoteMachineShellConnection
-
 
 log = logging.getLogger(__name__)
 

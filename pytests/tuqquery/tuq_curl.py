@@ -4,7 +4,6 @@ import json
 import uuid
 import time
 import os
-
 from tuq import QueryTests
 from membase.api.rest_client import RestConnection
 from membase.api.exception import CBQError, ReadDocumentException
@@ -42,23 +41,17 @@ class QueryCurlTests(QueryTests):
         super(QueryCurlTests, self).setUp()
         self.shell = RemoteMachineShellConnection(self.master)
         self.info = self.shell.extract_remote_info()
-        if self.info.type.lower() == 'windows':
-            self.curl_path = "%scurl" % self.path
-        else:
-            self.curl_path = "curl"
+        self.curl_path = "%scurl" % self.path if self.info.type.lower() == 'windows' else self.curl_path = "curl"
         self.rest = RestConnection(self.master)
-        self.cbqpath = '%scbq' % self.path + " -e %s:%s -q -u %s -p %s" % (self.master.ip,
-                                                                           self.n1ql_port,
-                                                                           self.rest.username,
-                                                                           self.rest.password)
+        self.cbqpath = '%scbq' % self.path + " -e %s:%s -q -u %s -p %s" \
+                                             % (self.master.ip, self.n1ql_port, self.rest.username, self.rest.password)
         self.query_service_url = "'http://%s:%s/query/service'" % (self.master.ip,self.n1ql_port)
         self.api_port = self.input.param("api_port", 8094)
         self.load_sample = self.input.param("load_sample", False)
         self.create_users = self.input.param("create_users", False)
         self.full_access = self.input.param("full_access", True)
         self.run_cbq_query('delete from system:prepareds')
-        if self.full_access:
-            self.shell.create_whitelist(self.n1ql_certs_path, {"all_access":True})
+        self.shell.create_whitelist(self.n1ql_certs_path, {"all_access":True}) if self.full_access else None
 
     def suite_setUp(self):
         super(QueryCurlTests, self).suite_setUp()

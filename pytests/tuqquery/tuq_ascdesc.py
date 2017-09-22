@@ -11,8 +11,7 @@ import traceback
 
 class AscDescTests(QueryTests):
     def setUp(self):
-        if not self._testMethodName == 'suite_setUp':
-            self.skip_buckets_handle = True
+        self.skip_buckets_handle = True if not self._testMethodName == 'suite_setUp' else None
         super(AscDescTests, self).setUp()
 
     def tearDown(self):

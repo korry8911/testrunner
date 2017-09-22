@@ -26,10 +26,8 @@ class QueryWhitelistTests(QueryTests):
             self.file_path = "File/opt/couchbase/bin/../var/lib/couchbase/n1qlcerts/curl_whitelist"
             self.lowercase_file_path = "file/opt/couchbase/bin/../var/lib/couchbase/n1qlcerts/curl_whitelist"
         self.rest = RestConnection(self.master)
-        self.cbqpath = '%scbq' % self.path + " -e %s:%s -q -u %s -p %s" % (self.master.ip,
-                                                                           self.n1ql_port,
-                                                                           self.rest.username,
-                                                                           self.rest.password)
+        self.cbqpath = '%scbq' % self.path + " -e %s:%s -q -u %s -p %s"\
+                                             % (self.master.ip, self.n1ql_port, self.rest.username, self.rest.password)
         self.query_service_url = "'http://%s:%s/query/service'" % (self.master.ip,self.n1ql_port)
         self.api_port = self.input.param("api_port", 8094)
         self.load_sample = self.input.param("load_sample", False)

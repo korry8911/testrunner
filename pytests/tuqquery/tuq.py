@@ -34,10 +34,10 @@ def PreparePlanHelper(res):
         rv = res["results"][0]["operator"]
     return rv
 
-class QueryTests(BaseTestCase):
+class
+    QueryTests(BaseTestCase):
     def setUp(self):
-        if not self._testMethodName == 'suite_setUp' and \
-                        str(self.__class__).find('upgrade_n1qlrbac') == -1:
+        if not self._testMethodName == 'suite_setUp' and str(self.__class__).find('upgrade_n1qlrbac') == -1:
             self.skip_buckets_handle = True
         else:
             self.skip_buckets_handle = False
@@ -96,34 +96,26 @@ class QueryTests(BaseTestCase):
             self.n1ql_certs_path = "/cygdrive/c/Program\ Files/Couchbase/server/var/lib/couchbase/n1qlcerts"
         elif type.lower() == "mac":
             self.path = testconstants.MAC_COUCHBASE_BIN_PATH
-        if self.primary_indx_type.lower() == "gsi":
-            self.gsi_type = self.input.param("gsi_type", 'plasma')
-        else:
-            self.gsi_type = None
+        self.gsi_type = self.input.param("gsi_type", 'plasma') if self.primary_indx_type.lower() == "gsi" else self.gsi_type = None
         if self.input.param("reload_data", False):
-            if self.analytics:
-                self.cluster.rebalance([self.master, self.cbas_node], [], [self.cbas_node], services=['cbas'])
+            self.cluster.rebalance([self.master, self.cbas_node], [], [self.cbas_node], services=['cbas']) if self.analytics else None
             for bucket in self.buckets:
                 self.cluster.bucket_flush(self.master, bucket=bucket, timeout=180000)
             self.gens_load = self.generate_docs(self.docs_per_day)
             self.load(self.gens_load, flag=self.item_flag)
-            if self.analytics:
-                self.cluster.rebalance([self.master, self.cbas_node], [self.cbas_node], [], services=['cbas'])
-        if not (hasattr(self, 'skip_generation') and self.skip_generation):
-            self.full_list = self.generate_full_docs_list(self.gens_load)
-        if self.input.param("gomaxprocs", None):
-            self.configure_gomaxprocs()
+            self.cluster.rebalance([self.master, self.cbas_node], [self.cbas_node], [], services=['cbas']) if self.analytics else None
+        self.full_list = self.generate_full_docs_list(self.gens_load) if not (hasattr(self, 'skip_generation') and self.skip_generation) else None
+        self.configure_gomaxprocs() if self.input.param("gomaxprocs", None) else None
         if str(self.__class__).find('QueriesUpgradeTests') == -1 and self.primary_index_created == False:
-            if (self.analytics == False):
-                self.create_primary_index_for_3_0_and_greater()
+            self.create_primary_index_for_3_0_and_greater() if self.analytics == False else None
         self.log.info('-'*100)
         self.log.info('Temp fix for MB-16888')
-        if (self.cluster_ops == False):
+        if self.cluster_ops == False:
             self.shell.execute_command("killall -9 cbq-engine")
             self.shell.execute_command("killall -9 indexer")
             self.sleep(20, 'wait for indexer')
         self.log.info('-'*100)
-        if (self.analytics):
+        if self.analytics:
             self.setup_analytics()
             self.sleep(30,'wait for analytics setup')
         if self.monitoring:
@@ -133,17 +125,12 @@ class QueryTests(BaseTestCase):
     def suite_setUp(self):
         try:
             os = self.shell.extract_remote_info().type.lower()
-            if os != 'windows':
-                self.sleep(10, 'sleep before load')
+            self.sleep(10, 'sleep before load') if os != 'windows' else None
             if not self.skip_load:
-                if self.flat_json:
-                    self.load_directory(self.gens_load)
-                else:
-                    self.load(self.gens_load, flag=self.item_flag)
-            if not self.input.param("skip_build_tuq", True):
-                self._build_tuq(self.master)
+                self.load_directory(self.gens_load) if self.flat_json else self.load(self.gens_load, flag=self.item_flag)
+            self._build_tuq(self.master) if not self.input.param("skip_build_tuq", True) else None
             self.skip_buckets_handle = True
-            if (self.analytics):
+            if self.analytics:
                 self.cluster.rebalance([self.master, self.cbas_node], [self.cbas_node], [], services=['cbas'])
                 self.setup_analytics()
                 self.sleep(30,'wait for analytics setup')
@@ -152,8 +139,7 @@ class QueryTests(BaseTestCase):
             self.tearDown()
 
     def tearDown(self):
-        if self._testMethodName == 'suite_tearDown':
-            self.skip_buckets_handle = False
+        self.skip_buckets_handle = False if self._testMethodName == 'suite_tearDown' else None
         if self.analytics == True:
             bucket_username = "cbadminbucket"
             bucket_password = "password"
@@ -218,8 +204,7 @@ class QueryTests(BaseTestCase):
         for index_stats in json_parsed:
             bucket = index_stats["Index"].split(":")[0]
             index_name = index_stats["Index"].split(":")[1]
-            if not bucket in index_storage_stats.keys():
-                index_storage_stats[bucket] = {}
+            index_storage_stats[bucket] = {} if not bucket in index_storage_stats.keys() else None
             index_storage_stats[bucket][index_name] = index_stats["Stats"]
         return index_storage_stats
 
@@ -229,9 +214,7 @@ class QueryTests(BaseTestCase):
         :return:
         """
         def validate_disk_writes(indexer_nodes=None):
-            if not indexer_nodes:
-                indexer_nodes = self.get_nodes_from_services_map(
-                    service_type="index", get_all_nodes=True)
+            indexer_nodes = self.get_nodes_from_services_map(service_type="index", get_all_nodes=True) if not indexer_nodes else None
             for node in indexer_nodes:
                 indexer_rest = RestConnection(node)
                 content = self.get_index_storage_stats()
@@ -242,8 +225,7 @@ class QueryTests(BaseTestCase):
             return True
 
         def kv_mutations(self, docs=1):
-            if not docs:
-                docs = self.docs_per_day
+            docs = self.docs_per_day if not docs else None
             gens_load = self.generate_docs(docs)
             self.full_docs_list = self.generate_full_docs_list(gens_load)
             self.gen_results = TuqGenerators(self.log, self.full_docs_list)
@@ -290,6 +272,90 @@ class QueryTests(BaseTestCase):
 #
 #   COMMON FUNCTIONS
 ##############################################################################################
+    def gen_docs(self, docs_per_day=1, type='default', values_type=None, name='tuq', start=0, end=0):
+        json_generator = JsonGenerator()
+        generators = []
+        if type == 'default':
+            if self.array_indexing:
+                generators = json_generator.generate_docs_employee_array(docs_per_day, start)
+            else:
+                generators = json_generator.generate_docs_employee(docs_per_day, start)
+
+        elif type == 'base64':
+            end = self.num_items if end==0 else None
+            values = ["Engineer", "Sales", "Support"]
+            generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
+
+        elif type == 'tasks':
+            start, end = 0, (28 + 1)
+            template = '{{ "task_name":"{0}", "project": "{1}"}}'
+            generators.append(DocumentGenerator("test_task", template, ["test_task-%s" % i for i in xrange(0,10)],
+                                                ["CB"], start=start, end=10))
+            generators.append(DocumentGenerator("test_task", template, ["test_task-%s" % i for i in xrange(10,20)],
+                                                ["MB"], start=10, end=20))
+            generators.append(DocumentGenerator("test_task", template, ["test_task-%s" % i for i in xrange(20,end)],
+                                                ["IT"], start=20, end=end))
+        elif type == 'join':
+            types = ['Engineer', 'Sales', 'Support']
+            join_yr = [2010, 2011]
+            join_mo = xrange(1, 12 + 1)
+            join_day = xrange(1, 28 + 1)
+            template = '{{ "name":"{0}", "join_yr":{1}, "join_mo":{2}, "join_day":{3},'
+            template += ' "job_title":"{4}", "tasks_ids":{5}}}'
+            for info in types:
+                for year in join_yr:
+                    for month in join_mo:
+                        for day in join_day:
+                            name = ["employee-%s" % (str(day))]
+                            tasks_ids = ["test_task-%s" % day, "test_task-%s" % (day + 1)]
+                            generators.append(DocumentGenerator("query-test-%s-%s-%s-%s" % (info, year, month, day),
+                                                                template, name, [year], [month], [day], [info], [tasks_ids],
+                                                                start=start, end=docs_per_day))
+
+        elif type == 'json_non_docs':
+            end = self.num_items if end==0 else None
+            if values_type == 'string':
+                values = ['Engineer', 'Sales', 'Support']
+            elif values_type == 'int':
+                values = [100, 200, 300, 400, 500]
+            elif values_type == 'array':
+                values = [[10, 20], [20, 30], [30, 40]]
+            else:
+                return []
+            generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
+
+        elif type == 'nulls':
+            end = self.num_items if not end else None
+            generators = []
+            index = end/3
+            template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P0":{1}, "P1":{2}, "P2":{3}}},'
+            template += '"story_point" : {4},"jira_tickets": {5}}}'
+            names = [str(i) for i in xrange(0, index)]
+            rates = xrange(0, index)
+            points = [[1,2,3],]
+            jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
+                            '{"Number": 2, "project": "mb", "description": "test"}]',]
+            generators.append(DocumentGenerator(name, template,
+                                                names, rates, rates, rates, points, jira_tickets,
+                                                start=start, end=index))
+            template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P0": null, "P1":null, "P2":null}},'
+            template += '"story_point" : [1,2,null],"jira_tickets": {1}}}'
+            jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
+                            '{"Number": 2, "project": "mb", "description": null}]',]
+            names = [str(i) for i in xrange(index, index + index)]
+            generators.append(DocumentGenerator(name, template,
+                                                names, jira_tickets,
+                                                start=index, end=index + index))
+            template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P4": 2}},'
+            template += '"story_point" : [null,null],"jira_tickets": {1}}}'
+            names = [str(i) for i in xrange(index + index, end)]
+            jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
+                            '{"Number": 2, "project": "mb"}]',]
+            generators.append(DocumentGenerator(name, template,
+                                                names, jira_tickets, start=index + index, end=end))
+            return self.generate_docs_nulls(name=name, start=start, end=end)
+
+        return generators
 
     def wait_for_index_present(self, bucket_name, index_name, fields_set, using, timeout=60):
         end_time = time.time() + timeout
@@ -327,7 +393,6 @@ class QueryTests(BaseTestCase):
     def query_runner(self, test_dict):
         test_results = dict()
         for test_name in test_dict.keys():
-
             pre_queries = test_dict[test_name]['pre_queries']
             queries = test_dict[test_name]['queries']
             post_queries = test_dict[test_name]['post_queries']
@@ -340,7 +405,6 @@ class QueryTests(BaseTestCase):
                                 frozenset([key.strip('`') for key in i['indexes']['index_key']]),
                                 i['indexes']['state'], i['indexes']['using'])
                                for i in query_response['results']]
-
             desired_indexes = [(index[0], index[1],
                                 frozenset([field.split()[0] for field in index[2]]), index[3], index[4])
                                for index in test_dict[test_name]['indexes']]
@@ -381,9 +445,7 @@ class QueryTests(BaseTestCase):
                         self.run_cbq_query("CREATE INDEX %s ON %s(%s) USING %s" % (name, keyspace, joined_fields, using))
                         self.wait_for_index_present(keyspace, name, fields, using)
                         self.log.info("created index: %s %s %s" % (keyspace, name, using))
-
             # at this point current indexes should = desired indexes
-
             res_dict = dict()
 
             # PRE_QUERIES STAGE
@@ -391,20 +453,17 @@ class QueryTests(BaseTestCase):
             for func in pre_queries:
                 res = func(res_dict)
                 res_dict['pre_q_res'].append(res)
-
             # QUERIES STAGE
             res_dict['q_res'] = []
             for query in queries:
                 self.log.info('Running query: ' + query)
                 res = self.run_cbq_query(query)
                 res_dict['q_res'].append(res)
-
             # POST_QUERIES STAGE
             res_dict['post_q_res'] = []
             for func in post_queries:
                 res = func(res_dict)
                 res_dict['post_q_res'].append(res)
-
             # ASSERT STAGE
             res_dict['errors'] = []
             for func in asserts:
@@ -414,7 +473,6 @@ class QueryTests(BaseTestCase):
                 except Exception as e:
                     self.log.info('Fail: ' + test_name)
                     res_dict['errors'].append((test_name, e, traceback.format_exc(), res_dict))
-
             # CLEANUP STAGE
             res_dict['cleanup_res'] = []
             for func in cleanups:
@@ -432,7 +490,6 @@ class QueryTests(BaseTestCase):
                 self.log.error('Error in query: ' + str(error[0]))
                 self.log.error(str(error[1]))
                 self.log.error(str(error[2]))
-
         # trigger failure
         self.assertEqual(has_errors, False)
 
@@ -453,21 +510,18 @@ class QueryTests(BaseTestCase):
     def compare(self, test, query, expected_result_list):
         actual_result_list = []
         actual_result = self.run_cbq_query(query)
-
         for i in xrange(0, 5):
             if test in ["test_asc_desc_composite_index", "test_meta", "test_asc_desc_array_index"]:
                 actual_result_list.append(actual_result['results'][i]['default']['_id'])
             elif test in ["test_desc_isReverse_ascOrder"]:
                 actual_result_list.append(actual_result['results'][i]['id'])
-
         self.assertEqual(actual_result_list, expected_result_list)
         query = query.replace("from default", "from default use index(`#primary`)")
         expected_result = self.run_cbq_query(query)
         self.assertEqual(actual_result['results'], expected_result['results'])
 
     def negative_common_body(self, queries_errors={}):
-        if not queries_errors:
-            self.fail("No queries to run!")
+        self.fail("No queries to run!") if not queries_errors else None
         for bucket in self.buckets:
             for query, value in queries_errors.iteritems():
                 error, code = value
@@ -475,12 +529,8 @@ class QueryTests(BaseTestCase):
                     actual_result = self.run_cbq_query(query.format(bucket.name))
                 except CBQError as ex:
                     self.log.error(ex)
-                    self.assertTrue(str(ex).find(error) != -1,
-                                    "Error is incorrect.Actual %s.\n Expected: %s.\n" %(
-                                                                str(ex).split(':')[-1], error))
-                    self.assertTrue(str(ex).find(str(code)) != -1,
-                                    "Error code is incorrect.Actual %s.\n Expected: %s.\n" %(
-                                                                str(ex), code))
+                    self.assertTrue(str(ex).find(error) != -1, "Error is incorrect.Actual %s.\n Expected: %s.\n" %(str(ex).split(':')[-1], error))
+                    self.assertTrue(str(ex).find(str(code)) != -1, "Error code is incorrect.Actual %s.\n Expected: %s.\n" %(str(ex), code))
                 else:
                     self.fail("There was no errors. Error expected: %s" % error)
 
@@ -488,8 +538,7 @@ class QueryTests(BaseTestCase):
         self.isprepared = True
         result_no_prepare = self.run_cbq_query(server=server)['results']
         if self.named_prepare:
-            if 'concurrent' not in self.named_prepare:
-                self.named_prepare=self.named_prepare + "_" +str(uuid.uuid4())[:4]
+            self.named_prepare=self.named_prepare + "_" +str(uuid.uuid4())[:4] if 'concurrent' not in self.named_prepare else None
             query = "PREPARE %s from %s" % (self.named_prepare,self.query)
         else:
             query = "PREPARE %s" % self.query
@@ -499,38 +548,33 @@ class QueryTests(BaseTestCase):
             result_with_prepare = self.run_cbq_query(query=prepared, is_prepared=True, encoded_plan=encoded_plan,server=server)['results']
         else:
             result_with_prepare = self.run_cbq_query(query=prepared, is_prepared=True,server=server)['results']
-        if(self.cover):
+        if self.cover :
             self.assertTrue("IndexScan in %s" % result_with_prepare)
             self.assertTrue("covers in %s" % result_with_prepare)
             self.assertTrue("filter_covers in %s" % result_with_prepare)
             self.assertFalse('ERROR' in (str(word).upper() for word in result_with_prepare))
-        msg = "Query result with prepare and without doesn't match.\nNo prepare: %s ... %s\nWith prepare: %s ... %s"
-        self.assertTrue(sorted(result_no_prepare) == sorted(result_with_prepare),
-                          msg % (result_no_prepare[:100],result_no_prepare[-100:],
-                                 result_with_prepare[:100],result_with_prepare[-100:]))
+        msg = "Query result with prepare and without doesn't match.\nNo prepare: %s ... %s\nWith prepare: %s ... %s" \
+              % (result_no_prepare[:100],result_no_prepare[-100:], result_with_prepare[:100],result_with_prepare[-100:])
+        self.assertTrue(sorted(result_no_prepare) == sorted(result_with_prepare), msg)
 
     def run_cbq_query(self, query=None, min_output_size=10, server=None, query_params={}, is_prepared=False,
                       encoded_plan=None):
         self.log.info("-"*100)
-        if query is None:
-            query = self.query
+        query = self.query if query is None else None
         if server is None:
            server = self.master
-           if self.input.tuq_client and "client" in self.input.tuq_client:
-               server = self.tuq_client
+           server = self.tuq_client if self.input.tuq_client and "client" in self.input.tuq_client else None
         cred_params = {'creds': []}
         rest = RestConnection(server)
         username = rest.username
         password = rest.password
         cred_params['creds'].append({'user': username, 'pass': password})
         for bucket in self.buckets:
-            if bucket.saslPassword:
-                cred_params['creds'].append({'user': 'local:%s' % bucket.name, 'pass': bucket.saslPassword})
+            cred_params['creds'].append({'user': 'local:%s' % bucket.name, 'pass': bucket.saslPassword}) if bucket.saslPassword else None
         query_params.update(cred_params)
         if self.use_rest:
             query_params.update({'scan_consistency': self.scan_consistency})
-            if hasattr(self, 'query_params') and self.query_params:
-                query_params = self.query_params
+            query_params = self.query_params if hasattr(self, 'query_params') and self.query_params else None
             if self.hint_index and (query.lower().find('select') != -1):
                 from_clause = re.sub(r'let.*', '', re.sub(r'.*from', '', re.sub(r'where.*', '', query)))
                 from_clause = re.sub(r'LET.*', '', re.sub(r'.*FROM', '', re.sub(r'WHERE.*', '', from_clause)))
@@ -547,32 +591,21 @@ class QueryTests(BaseTestCase):
                 result = RestConnection(self.cbas_node).execute_statement_on_cbas(query, "immediate")
                 result = json.loads(result)
             else :
-                result = rest.query_tool(query, self.n1ql_port, query_params=query_params,
-                                                            is_prepared=is_prepared,
-                                                            named_prepare=self.named_prepare,
-                                                            encoded_plan=encoded_plan,
-                                                            servers=self.servers)
+                result = rest.query_tool(query, self.n1ql_port, query_params=query_params, is_prepared=is_prepared,
+                                         named_prepare=self.named_prepare, encoded_plan=encoded_plan, servers=self.servers)
         else:
             if self.version == "git_repo":
-                output = self.shell.execute_commands_inside("$GOPATH/src/github.com/couchbase/query/" +\
-                                                            "shell/cbq/cbq ","","","","","","")
+                output = self.shell.execute_commands_inside("$GOPATH/src/github.com/couchbase/query/shell/cbq/cbq ","","","","","","")
             else:
                 if not(self.isprepared):
                     query = query.replace('"', '\\"')
                     query = query.replace('`', '\\`')
-
                     cmd =  "%scbq  -engine=http://%s:%s/ -q -u %s -p %s" % (self.path,server.ip,server.port,username,password)
-
                     output = self.shell.execute_commands_inside(cmd,query,"","","","","")
-                    if not(output[0] == '{'):
-                        output1 = '{'+str(output)
-                    else:
-                        output1 = output
+                    output1 = '{'+str(output) if not(output[0] == '{') else output1 = output
                     result = json.loads(output1)
-        if isinstance(result, str) or 'errors' in result:
-            raise CBQError(result, server.ip)
-        if 'metrics' in result:
-            self.log.info("TOTAL ELAPSED TIME: %s" % result["metrics"]["elapsedTime"])
+        raise CBQError(result, server.ip) if isinstance(result, str) or 'errors' in result else None
+        self.log.info("TOTAL ELAPSED TIME: %s" % result["metrics"]["elapsedTime"]) if 'metrics' in result else None
         return result
 
     def build_url(self, version):
@@ -580,8 +613,7 @@ class QueryTests(BaseTestCase):
         type = info.distribution_type.lower()
         if type in ["ubuntu", "centos", "red hat"]:
             url = "https://s3.amazonaws.com/packages.couchbase.com/releases/couchbase-query/dp1/"
-            url += "couchbase-query_%s_%s_linux.tar.gz" %(
-                                version, info.architecture_type)
+            url += "couchbase-query_%s_%s_linux.tar.gz" %(version, info.architecture_type)
         #TODO for windows
         return url
 
@@ -594,25 +626,19 @@ class QueryTests(BaseTestCase):
             else:
                 goroot = testconstants.WINDOWS_GOROOT
                 gopath = testconstants.WINDOWS_GOPATH
-            if self.input.tuq_client and "gopath" in self.input.tuq_client:
-                gopath = self.input.tuq_client["gopath"]
-            if self.input.tuq_client and "goroot" in self.input.tuq_client:
-                goroot = self.input.tuq_client["goroot"]
+            gopath = self.input.tuq_client["gopath"] if self.input.tuq_client and "gopath" in self.input.tuq_client else None
+            goroot = self.input.tuq_client["goroot"] if self.input.tuq_client and "goroot" in self.input.tuq_client else None
             cmd = "rm -rf {0}/src/github.com".format(gopath)
             self.shell.execute_command(cmd)
             cmd= 'export GOROOT={0} && export GOPATH={1} &&'.format(goroot, gopath) +\
-                ' export PATH=$PATH:$GOROOT/bin && ' +\
-                'go get github.com/couchbaselabs/tuqtng;' +\
-                'cd $GOPATH/src/github.com/couchbaselabs/tuqtng; ' +\
-                'go get -d -v ./...; cd .'
+                ' export PATH=$PATH:$GOROOT/bin && go get github.com/couchbaselabs/tuqtng;' +\
+                'cd $GOPATH/src/github.com/couchbaselabs/tuqtng; go get -d -v ./...; cd .'
             self.shell.execute_command(cmd)
             cmd = 'export GOROOT={0} && export GOPATH={1} &&'.format(goroot, gopath) +\
-                ' export PATH=$PATH:$GOROOT/bin && ' +\
-                'cd $GOPATH/src/github.com/couchbaselabs/tuqtng; go build; cd .'
+                ' export PATH=$PATH:$GOROOT/bin && cd $GOPATH/src/github.com/couchbaselabs/tuqtng; go build; cd .'
             self.shell.execute_command(cmd)
             cmd = 'export GOROOT={0} && export GOPATH={1} &&'.format(goroot, gopath) +\
-                ' export PATH=$PATH:$GOROOT/bin && ' +\
-                'cd $GOPATH/src/github.com/couchbaselabs/tuqtng/tuq_client; go build; cd .'
+                ' export PATH=$PATH:$GOROOT/bin && cd $GOPATH/src/github.com/couchbaselabs/tuqtng/tuq_client; go build; cd .'
             self.shell.execute_command(cmd)
         else:
             cbq_url = self.build_url(self.version)
@@ -621,12 +647,9 @@ class QueryTests(BaseTestCase):
             cmd += "tar -xvf tuq.tar.gz;rm -rf tuq.tar.gz"
             self.shell.execute_command(cmd)
 
-
     def _start_command_line_query(self, server, options='', user=None, password=None):
-        auth_row = None
         out = ''
-        if user and password:
-            auth_row = '%s:%s@' % (user, password)
+        auth_row = '%s:%s@' % (user, password) if user and password else auth_row = None
         os = self.shell.extract_remote_info().type.lower()
         if self.flat_json:
             if os == 'windows':
@@ -640,20 +663,14 @@ class QueryTests(BaseTestCase):
             out = self.shell.execute_command(cmd)
             self.log.info(out)
         elif self.version == "git_repo":
-            if os != 'windows':
-                gopath = testconstants.LINUX_GOPATH
-            else:
-                gopath = testconstants.WINDOWS_GOPATH
-            if self.input.tuq_client and "gopath" in self.input.tuq_client:
-                gopath = self.input.tuq_client["gopath"]
+            gopath = testconstants.LINUX_GOPATH if os != 'windows' else gopath = testconstants.WINDOWS_GOPATH
+            gopath = self.input.tuq_client["gopath"] if self.input.tuq_client and "gopath" in self.input.tuq_client else None
             if os == 'windows':
                 cmd = "cd %s/src/github.com/couchbase/query/server/cbq-engine; " % (gopath) +\
-                "./cbq-engine.exe -datastore http://%s%s:%s/ %s >/dev/null 2>&1 &" %(
-                                                                ('', auth_row)[auth_row is not None], server.ip, server.port, options)
+                "./cbq-engine.exe -datastore http://%s%s:%s/ %s >/dev/null 2>&1 &" %(('', auth_row)[auth_row is not None], server.ip, server.port, options)
             else:
                 cmd = "cd %s/src/github.com/couchbase/query/server/cbq-engine; " % (gopath) +\
-                "./cbq-engine -datastore http://%s%s:%s/ %s >n1ql.log 2>&1 &" %(
-                                                                ('', auth_row)[auth_row is not None], server.ip, server.port, options)
+                "./cbq-engine -datastore http://%s%s:%s/ %s >n1ql.log 2>&1 &" % (('', auth_row)[auth_row is not None], server.ip, server.port, options)
             out = self.shell.execute_command(cmd)
         elif self.version == "sherlock":
             if self.services_init and self.services_init.find('n1ql') != -1:
@@ -663,22 +680,18 @@ class QueryTests(BaseTestCase):
             if os == 'windows':
                 couchbase_path = testconstants.WIN_COUCHBASE_BIN_PATH
                 cmd = "cd %s; " % (couchbase_path) +\
-                "./cbq-engine.exe -datastore http://%s%s:%s/ %s >/dev/null 2>&1 &" %(
-                                                                ('', auth_row)[auth_row is not None], server.ip, server.port, options)
+                "./cbq-engine.exe -datastore http://%s%s:%s/ %s >/dev/null 2>&1 &" %(('', auth_row)[auth_row is not None], server.ip, server.port, options)
             else:
                 couchbase_path = testconstants.LINUX_COUCHBASE_BIN_PATH
                 cmd = "cd %s; " % (couchbase_path) +\
-                "./cbq-engine -datastore http://%s%s:%s/ %s >/dev/null 2>&1 &" %(
-                                                                ('', auth_row)[auth_row is not None], server.ip, server.port, options)
+                "./cbq-engine -datastore http://%s%s:%s/ %s >/dev/null 2>&1 &" %(('', auth_row)[auth_row is not None], server.ip, server.port, options)
             out = self.shell.execute_command(cmd)
             self.log.info(out)
         else:
             if os != 'windows':
-                cmd = "cd /tmp/tuq;./cbq-engine -couchbase http://%s:%s/ >/dev/null 2>&1 &" %(
-                                                                server.ip, server.port)
+                cmd = "cd /tmp/tuq;./cbq-engine -couchbase http://%s:%s/ >/dev/null 2>&1 &" %(server.ip, server.port)
             else:
-                cmd = "cd /cygdrive/c/tuq;./cbq-engine.exe -couchbase http://%s:%s/ >/dev/null 2>&1 &" %(
-                                                                server.ip, server.port)
+                cmd = "cd /cygdrive/c/tuq;./cbq-engine.exe -couchbase http://%s:%s/ >/dev/null 2>&1 &" %(server.ip, server.port)
             self.shell.execute_command(cmd)
         return out
 
@@ -689,20 +702,14 @@ class QueryTests(BaseTestCase):
         self.shell.execute_command("export NS_SERVER_CBAUTH_PWD=\"{0}\"".format(server.rest_password))
         self.shell.execute_command("export NS_SERVER_CBAUTH_RPC_URL=\"http://{0}:{1}/cbauth-demo\"".format(server.ip,server.port))
         self.shell.execute_command("export CBAUTH_REVRPC_URL=\"http://{0}:{1}@{2}:{3}/query\"".format(server.rest_username,server.rest_password,server.ip,server.port))
-        #self.shell.execute_command("/etc/init.d/couchbase-server restart")
-        #self.sleep(30)
 
     #This method has no usages anywhere
     def _parse_query_output(self, output):
-         if output.find("cbq>") == 0:
-             output = output[output.find("cbq>") + 4:].strip()
-         if output.find("tuq_client>") == 0:
-             output = output[output.find("tuq_client>") + 11:].strip()
-         if output.find("cbq>") != -1:
-             output = output[:output.find("cbq>")].strip()
-         if output.find("tuq_client>") != -1:
-             output = output[:output.find("tuq_client>")].strip()
-         return json.loads(output)
+        output = output[output.find("cbq>") + 4:].strip() if output.find("cbq>") == 0 else None
+        output = output[output.find("tuq_client>") + 11:].strip() if output.find("tuq_client>") == 0 else None
+        output = output[:output.find("cbq>")].strip() if output.find("cbq>") != -1 else None
+        output = output[:output.find("tuq_client>")].strip() if output.find("tuq_client>") != -1 else None
+        return json.loads(output)
 
     def generate_docs(self, docs_per_day, start=0):
         json_generator = JsonGenerator()
@@ -717,28 +724,20 @@ class QueryTests(BaseTestCase):
             expected_result = expected_result[:self.max_verify]
             self.assertTrue(actual_result == expected_result, "Results are incorrect")
             return
-
         if len(actual_result) != len(expected_result):
             missing, extra = self.check_missing_and_extra(actual_result, expected_result)
             self.log.error("Missing items: %s.\n Extra items: %s" % (missing[:100], extra[:100]))
-            self.fail("Results are incorrect.Actual num %s. Expected num: %s.\n" % (
-                                            len(actual_result), len(expected_result)))
-
-        msg = "Results are incorrect.\n Actual first and last 100:  %s.\n ... \n %s" +\
-        "Expected first and last 100: %s.\n  ... \n %s"
-        self.assertTrue(actual_result == expected_result,
-                          msg % (actual_result[:100],actual_result[-100:],
-                                 expected_result[:100],expected_result[-100:]))
+            self.fail("Results are incorrect.Actual num %s. Expected num: %s.\n" % (len(actual_result), len(expected_result)))
+        msg = "Results are incorrect.\n Actual first and last 100:  %s.\n ... \n %s Expected first and last 100: %s.\n  ... \n %s" \
+              % (actual_result[:100], actual_result[-100:], expected_result[:100], expected_result[-100:])
+        self.assertTrue(actual_result == expected_result, msg)
 
     def check_missing_and_extra(self, actual, expected):
-        missing = []
-        extra = []
+        missing, extra = [], []
         for item in actual:
-            if not (item in expected):
-                 extra.append(item)
+            extra.append(item) if not (item in expected) else None
         for item in expected:
-            if not (item in actual):
-                missing.append(item)
+            missing.append(item) if not (item in actual) else None
         return missing, extra
 
     def sort_nested_list(self, result, key=None):
@@ -796,27 +795,22 @@ class QueryTests(BaseTestCase):
         self.sleep(30, 'Sleep for some time prior to index creation')
         rest = RestConnection(self.master)
         versions = rest.get_nodes_versions()
-
         if versions[0].startswith("4") or versions[0].startswith("3") or versions[0].startswith("5"):
             for bucket in self.buckets:
-
                 if self.primary_indx_drop:
                     self.log.info("Dropping primary index for %s ..." % bucket.name)
                     self.query = "DROP PRIMARY INDEX ON %s using %s" % (bucket.name,self.primary_indx_type)
                     self.sleep(3, 'Sleep for some time after index drop')
                 self.query = "select * from system:indexes where name='#primary' and keyspace_id = %s" % bucket.name
                 res = self.run_cbq_query(self.query)
-
                 if (res['metrics']['resultCount'] == 0):
                     self.query = "CREATE PRIMARY INDEX ON %s USING %s" % (bucket.name, self.primary_indx_type)
                     self.log.info("Creating primary index for %s ..." % bucket.name)
-                    # if self.gsi_type:
-                    #     self.query += " WITH {'index_type': 'memdb'}"
                     try:
                         self.run_cbq_query()
                         self.primary_index_created= True
-                        if self.primary_indx_type.lower() == 'gsi':
-                            self._wait_for_index_online(bucket, '#primary')
+                        self._wait_for_index_online(bucket, '#primary') if self.primary_indx_type.lower() == 'gsi' else None
+
                     except Exception, ex:
                         self.log.info(str(ex))
 
@@ -834,7 +828,6 @@ class QueryTests(BaseTestCase):
                         return
             self.sleep(5, 'index is pending or not in the list. sleeping... (%s)' % [item['indexes'] for item in res['results']])
         raise Exception('index %s is not online. last response is %s' % (index_name, res))
-
 ##############################################################################################
 #
 #   tuq_sanity.py helpers
@@ -886,14 +879,11 @@ class QueryTests(BaseTestCase):
             else:
                 self.log.error("cover keyword missing from json children ")
                 self.fail("cover keyword missing from json children ")
-            if 'IntersectScan' in s:
-                self.log.error("This is a covered query, Intersec scan should not be used")
-
+            self.log.error("This is a covered query, Intersec scan should not be used") if 'IntersectScan' in s else None
 ##############################################################################################
 #
 #   upgrade_n1qlrbac.py helpers
 ##############################################################################################
-
     def query_select_insert_update_delete_helper(self):
         self.create_users(users=[{'id': 'john_insert', 'name': 'johnInsert', 'password':'password'}])
         self.create_users(users=[{'id': 'john_update', 'name': 'johnUpdate', 'password':'password'}])
@@ -911,7 +901,6 @@ class QueryTests(BaseTestCase):
             self.query = "GRANT {0} to {1}".format("replication_admin",'john_rep')
             self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
 
-
     def query_select_insert_update_delete_helper_default(self):
         self.create_users(users=[{'id': 'john_insert', 'name': 'johnInsert', 'password':'password'}])
         self.create_users(users=[{'id': 'john_update', 'name': 'johnUpdate', 'password':'password'}])
@@ -924,12 +913,9 @@ class QueryTests(BaseTestCase):
         self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
 
     def change_and_update_permission(self, query_type, permission, user, bucket, cmd, error_msg):
-        if query_type == 'with_bucket':
-            self.query = "GRANT {0} on {1} to {2}".format(permission, bucket, user)
-        if query_type == 'without_bucket':
-            self.query = "GRANT {0} to {1}".format(permission,user)
-        if query_type in ['with_bucket', 'without_bucket']:
-            self.n1ql_helper.run_cbq_query(query=self.query, server=self.n1ql_node)
+        self.query = "GRANT {0} on {1} to {2}".format(permission, bucket, user) if query_type == 'with_bucket' else None
+        self.query = "GRANT {0} to {1}".format(permission,user) if query_type == 'without_bucket' else None
+        self.n1ql_helper.run_cbq_query(query=self.query, server=self.n1ql_node) if query_type in ['with_bucket', 'without_bucket'] else None
         output, error = self.shell.execute_command(cmd)
         self.shell.log_command_output(output, error)
         self.assertTrue(any("success" in line for line in output), error_msg.format(bucket, user))
@@ -963,7 +949,6 @@ class QueryTests(BaseTestCase):
         self.create_users(users=[{'id': 'john_system', 'name': 'john', 'password':'password'}])
         self.query = "GRANT {0} to {1}".format("query_system_catalog",'john_system')
         self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
-
         for bucket in self.buckets:
             cmds = ["{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement=SELECT * from system:keyspaces'". \
                         format('john_system','password', self.master.ip, bucket.name,self.curl_path),
@@ -984,7 +969,6 @@ class QueryTests(BaseTestCase):
             for cmd in cmds:
                 self.change_and_update_permission(None, None, 'john_system', bucket.name, cmd, "Unable to select from {0} as user {1}")
 
-
     def check_system_catalog_helper(self):
         """
         These test might fail for now as system catalog tables are not
@@ -1003,11 +987,9 @@ class QueryTests(BaseTestCase):
         for query in ['select * from system:datastores', 'select * from system:namespaces',
                       'select * from system:keyspaces']:
             self.query_assert_success(query)
-
         self.query = 'create index idx1 on {0}(name)'.format(self.buckets[0].name)
         res = self.run_cbq_query(query=query)
         self.sleep(10)
-
         for query in ['select * from system:indexes', 'select * from system:dual',
                       "prepare st1 from select * from {0} union select * from {0} union select * from {0}".format(self.buckets[0].name),
                       'execute st1']:
@@ -1227,8 +1209,7 @@ class QueryTests(BaseTestCase):
                                         'password': 'passw0rd'}
         :return: Nothing
         """
-        if not users:
-            users = self.users
+        users = self.users if not users else None
         RbacBase().create_user_source(users, 'builtin', self.master)
         self.log.info("SUCCESS: User(s) %s created" % ','.join([user['name'] for user in users]))
 
@@ -1238,17 +1219,14 @@ class QueryTests(BaseTestCase):
         on the specific machine where ldap is enabled.
         """
         cli_cmd = "{0}couchbase-cli -c {1}:8091 -u Administrator -p password".format(self.path, self.master.ip)
-
         cmds = [("create a read only user account", cli_cmd+" user-manage --set --ro-username=ro_non_ldap --ro-password=readonlypassword"),
                 ("create a bucket admin on bucket0 user account", cli_cmd+" admin-role-manage --set-users=bob --set-names=Bob --roles=bucket_admin[bucket0]"),
                 ("create a bucket admin on all buckets user account", cli_cmd+" admin-role-manage --set-users=mary --set-names=Mary --roles=bucket_admin[*]"),
                 ("create a cluster admin user account", cli_cmd+"admin-role-manage --set-users=john_cluster --set-names=john_cluster --roles=cluster_admin"),
                 ("create a admin user account", cli_cmd+" admin-role-manage --set-users=john_admin --set-names=john_admin --roles=admin")]
-
         for cmd in cmds:
             self.log.info(cmd[0])
             self.shell.execute_command(cmd[1])
-
         users = [{'id': 'Bob', 'name': 'Bob', 'password': 'password', 'roles': 'admin'},
                  {'id': 'mary', 'name': 'Mary', 'password': 'password', 'roles': 'cluster_admin'},
                  {'id': 'john_cluster','name':'john_cluster','password':'password', 'roles': 'cluster_admin'},
@@ -1297,8 +1275,7 @@ class QueryTests(BaseTestCase):
                 rebalance.result()
                 active_nodes = []
                 for active_node in self.servers:
-                    if active_node.ip != node.ip:
-                        active_nodes.append(active_node)
+                    active_nodes.append(active_node) if active_node.ip != node.ip else None
 
                 self.log.info("Upgrading the node...")
                 upgrade_th = self._async_update(self.upgrade_to, [node])
@@ -1330,9 +1307,7 @@ class QueryTests(BaseTestCase):
                 failover_task.result()
                 active_nodes = []
                 for active_node in self.servers:
-                    if active_node.ip != node.ip:
-                        active_nodes.append(active_node)
-
+                    active_nodes.append(active_node) if active_node.ip != node.ip else None
                 self.log.info("Upgrading the node...")
                 upgrade_th = self._async_update(self.upgrade_to, [node])
                 for th in upgrade_th:
@@ -1356,6 +1331,7 @@ class QueryTests(BaseTestCase):
                 self.sleep(60)
                 node_version = RestConnection(node).get_nodes_versions()
                 self.log.info("{0} node {1} Upgraded to: {2}".format(service, node.ip, node_version))
+
 ##############################################################################################
 #
 # n1ql_rbac_2.py helpers
@@ -1368,18 +1344,14 @@ class QueryTests(BaseTestCase):
                                         'password': 'passw0rd'}
         :return: Nothing
         """
-        if not users:
-            users = self.users
+        users = self.users if not users else None
         RbacBase().create_user_source(users,'builtin',self.master)
-        self.log.info("SUCCESS: User(s) %s created"
-                      % ','.join([user['name'] for user in users]))
+        self.log.info("SUCCESS: User(s) %s created" % ','.join([user['name'] for user in users]))
 
     def assign_role(self, rest=None, roles=None):
-        if not rest:
-            rest = RestConnection(self.master)
+        rest = RestConnection(self.master) if not rest else None
         #Assign roles to users
-        if not roles:
-            roles = self.roles
+        roles = self.roles if not roles else None
         RbacBase().add_user_role(roles, rest,'builtin')
         for user_role in roles:
             self.log.info("SUCCESS: Role(s) %s assigned to %s"
@@ -1434,8 +1406,7 @@ class QueryTests(BaseTestCase):
         return status, content, header
 
     def grant_role(self, role=None):
-        if not role:
-            role = self.roles[0]['roles']
+        role = self.roles[0]['roles'] if not role else None
         if self.all_buckets:
             list = []
             for bucket in self.buckets:
@@ -1451,33 +1422,29 @@ class QueryTests(BaseTestCase):
                 self.query = "GRANT {0} on {1} to {2}".format(role1,name, self.users[0]['id'])
                 actual_result =self.run_cbq_query()
         elif "(" in role:
-                role1 = role.split("(")[0]
-                name = role.split("(")[1][:-1]
-                self.query = "GRANT {0} on {1} to {2}".format(role1,name, self.users[0]['id'])
-                actual_result = self.run_cbq_query()
+            role1 = role.split("(")[0]
+            name = role.split("(")[1][:-1]
+            self.query = "GRANT {0} on {1} to {2}".format(role1,name, self.users[0]['id'])
+            actual_result = self.run_cbq_query()
         else:
-                self.query = "GRANT {0} to {1}".format(role, self.users[0]['id'])
-                actual_result = self.run_cbq_query()
-
-        self.assertTrue(actual_result['status'] == 'success', "Unable to grant role {0} to {1}".
-                                                                format(role, self.users[0]['id']))
+            self.query = "GRANT {0} to {1}".format(role, self.users[0]['id'])
+            actual_result = self.run_cbq_query()
+        msg = "Unable to grant role {0} to {1}".format(role, self.users[0]['id'])
+        self.assertTrue(actual_result['status'] == 'success', msg)
 
     def revoke_role(self, role=None):
         if not role:
             role = self.roles[0]['roles']
-            if self.all_buckets:
-                role += "(`*`)"
+            role += "(`*`)" if self.all_buckets else None
         self.query = "REVOKE {0} FROM {1}".format(role, self.users[0]['id'])
         actual_result = self.run_cbq_query()
-        self.assertTrue(actual_result['status'] == 'success', "Unable to revoke role {0} from {1}".
-                                                                format(role, self.users[0]['id']))
+        msg = "Unable to revoke role {0} from {1}".format(role, self.users[0]['id'])
+        self.assertTrue(actual_result['status'] == 'success', msg)
 
     def curl_with_roles(self, query):
         shell = RemoteMachineShellConnection(self.master)
-        cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d " \
-              "'statement={3}'". \
-            format(self.users[0]['id'], self.users[0]['password'], self.master.ip, query,
-                   self.curl_path)
+        cmd = "{4} -u {0}:{1} http://{2}:8093/query/service -d 'statement={3}'". \
+            format(self.users[0]['id'], self.users[0]['password'], self.master.ip, query, self.curl_path)
         output, error = shell.execute_command(cmd)
         shell.log_command_output(output, error)
         new_list = [string.strip() for string in output]
@@ -1576,8 +1543,7 @@ class QueryTests(BaseTestCase):
         #     self.assertTrue(res['metrics']['resultCount']> 0)
         if role not in ["ro_admin", "replication_admin", "query_insert(default)", "query_delete(default)",
                         "query_update(default)", "bucket_full_access(default)", "query_system_catalog", "views_admin(default)"]:
-            self.query = "prepare st1 from select * from default union select * from " \
-                         "default union select * from default"
+            self.query = "prepare st1 from select * from default union select * from default union select * from default"
             res = self.curl_with_roles(self.query)
             self.query = 'execute st1'
             res = self.curl_with_roles(self.query)
@@ -1745,7 +1711,6 @@ class QueryTests(BaseTestCase):
         res = self.curl_with_roles(self.query)
         role_list = ["query_delete(default)", "query_delete(standard_bucket0)", "delete(default)", "bucket_full_access(default)"]
         self.assertNotEquals(res['status'], 'success') if role in role_list else self.assertTrue(res['status'] == 'success')
-
         self.query = 'delete from system:active_requests'
         res = self.curl_with_roles(self.query)
         self.assertTrue(res['status'] == 'stopped')
@@ -1806,8 +1771,7 @@ class QueryTests(BaseTestCase):
             filename = "/cygdrive/c/tmp/test.txt"
 
         filedata = ""
-        if not (query == ""):
-            main_command = main_command + " -s=\"" + query + '"'
+        main_command = main_command + " -s=\"" + query + '"' if not (query == "") else None
         elif (shell.remote and not (queries == "")):
             sftp = shell._ssh_client.open_sftp()
             filein = sftp.open(filename, 'w')
@@ -1831,7 +1795,6 @@ class QueryTests(BaseTestCase):
         newdata = newdata.replace("user", bucket1)
         newdata = newdata.replace("pass", password)
         newdata = newdata.replace("bucket1", bucket1)
-
         newdata = newdata.replace("user1", bucket1)
         newdata = newdata.replace("pass1", password)
         newdata = newdata.replace("bucket2", bucket2)
@@ -1871,8 +1834,7 @@ class QueryTests(BaseTestCase):
                     if "Inputwasnotastatement" in output:
                         output = "status:FAIL"
                         break
-                    if "timeout" in output:
-                        output = "status:timeout"
+                    output = "status:timeout" if "timeout" in output else None
                 else:
                     count += 1
             stdin.close()
@@ -1918,8 +1880,7 @@ class QueryTests(BaseTestCase):
 
     def _generate_date_range_millis_query(self, initial_millis, final_millis, part, increment=None):
         if increment is None:
-            query = 'SELECT DATE_RANGE_MILLIS({0}, {1}, "{2}")'.format(initial_millis, final_millis,
-                                                                       part)
+            query = 'SELECT DATE_RANGE_MILLIS({0}, {1}, "{2}")'.format(initial_millis, final_millis, part)
         else:
             query = 'SELECT DATE_RANGE_MILLIS({0}, {1}, "{2}", {3})'.format(initial_millis, final_millis, part, increment)
         return query
@@ -2013,28 +1974,19 @@ class QueryTests(BaseTestCase):
 
     def _compare_view_and_tool_result(self, view_result, tool_result, check_values=True):
         self.log.info("Comparing result ...")
-        formated_tool_res = [{"key" : [doc["join_yr"], doc["join_mo"]],
-                              "value" : doc["name"]} for doc in tool_result]
-        formated_view_res = [{"key" : row["key"],
-                              "value": row["value"]} for row in view_result]
-
-        self.assertEqual(len(formated_tool_res), len(formated_view_res),
-                         "Query results are not equal. Tool %s, view %s" %(
-                             len(formated_tool_res), len(formated_view_res)))
+        formated_tool_res = [{"key" : [doc["join_yr"], doc["join_mo"]], "value" : doc["name"]} for doc in tool_result]
+        formated_view_res = [{"key" : row["key"], "value": row["value"]} for row in view_result]
+        msg = "Query results are not equal. Tool %s, view %s" %(len(formated_tool_res), len(formated_view_res))
+        self.assertEqual(len(formated_tool_res), len(formated_view_res), msg)
         self.log.info("Length is equal")
-        self.assertEqual([row["key"] for row in formated_tool_res],
-                         [row["key"] for row in formated_view_res],
-                         "Query results sorting are not equal./n Actual %s, Expected %s" %(
-                             formated_tool_res[:100],formated_view_res[:100]))
+        msg =  "Query results sorting are not equal./n Actual %s, Expected %s" %(formated_tool_res[:100],formated_view_res[:100])
+        self.assertEqual([row["key"] for row in formated_tool_res], [row["key"] for row in formated_view_res], msg)
         self.log.info("Sorting is equal")
         if check_values:
-            formated_tool_res = sorted(formated_tool_res, key=lambda doc: (doc['key'],
-                                                                           doc['value']))
-            formated_view_res = sorted(formated_view_res, key=lambda doc: (doc['key'],
-                                                                           doc['value']))
-            self.assertTrue(formated_tool_res == formated_view_res,
-                            "Query results sorting are not equal. View but not tool has [%s]" %(
-                                [r for r in view_result if r in formated_tool_res]))
+            formated_tool_res = sorted(formated_tool_res, key=lambda doc: (doc['key'], doc['value']))
+            formated_view_res = sorted(formated_view_res, key=lambda doc: (doc['key'], doc['value']))
+            msg = "Query results sorting are not equal. View but not tool has [%s]" %([r for r in view_result if r in formated_tool_res])
+            self.assertTrue(formated_tool_res == formated_view_res, msg)
             self.log.info("Items are equal")
 
 ##############################################################################################
@@ -2044,13 +1996,10 @@ class QueryTests(BaseTestCase):
 
     def _create_headers(self):
         authorization = ""
-        return {'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic %s' % authorization,
-                'Accept': '*/*'}
+        return {'Content-Type': 'application/x-www-form-urlencoded','Authorization': 'Basic %s' % authorization, 'Accept': '*/*'}
 
     def _http_request(self, api, method='GET', params='', headers=None, timeout=120):
-        if not headers:
-            headers = self._create_headers()
+        headers = self._create_headers() if not headers else None
         end_time = time.time() + timeout
         while True:
             try:
@@ -2064,8 +2013,7 @@ class QueryTests(BaseTestCase):
                         json_parsed = {}
                         json_parsed["error"] = "status: {0}, content: {1}".format(response['status'], content)
                     reason = "unknown"
-                    if "error" in json_parsed:
-                        reason = json_parsed["error"]
+                    reason = json_parsed["error"] if "error" in json_parsed else None
                     self.log.error('{0} error {1} reason: {2} {3}'.format(api, response['status'], reason, content.rstrip('\n')))
                     return False, content, response
             except socket.error as e:
@@ -2078,56 +2026,10 @@ class QueryTests(BaseTestCase):
 #   tuq_nulls.py helpers
 ##############################################################################################
 
-    def generate_docs_nulls(self, name="tuq", start=0, end=0):
-        if not end:
-            end = self.num_items
-        generators = []
-        index = end/3
-        template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P0":{1}, "P1":{2}, "P2":{3}}},'
-        template += '"story_point" : {4},"jira_tickets": {5}}}'
-        names = [str(i) for i in xrange(0, index)]
-        rates = xrange(0, index)
-        points = [[1,2,3],]
-        jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
-                        '{"Number": 2, "project": "mb", "description": "test"}]',]
-        generators.append(DocumentGenerator(name, template,
-                                            names, rates, rates, rates, points, jira_tickets,
-                                            start=start, end=index))
-        template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P0": null, "P1":null, "P2":null}},'
-        template += '"story_point" : [1,2,null],"jira_tickets": {1}}}'
-        jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
-                        '{"Number": 2, "project": "mb", "description": null}]',]
-        names = [str(i) for i in xrange(index, index + index)]
-        generators.append(DocumentGenerator(name, template,
-                                            names, jira_tickets,
-                                            start=index, end=index + index))
-        template = '{{ "feature_name":"{0}", "coverage_tests" : {{"P4": 2}},'
-        template += '"story_point" : [null,null],"jira_tickets": {1}}}'
-        names = [str(i) for i in xrange(index + index, end)]
-        jira_tickets = ['[{"Number": 1, "project": "cb", "description": "test"},' + \
-                        '{"Number": 2, "project": "mb"}]',]
-        generators.append(DocumentGenerator(name, template,
-                                            names, jira_tickets, start=index + index, end=end))
-        return generators
-
 ##############################################################################################
 #
 #   tuq_json_non_docs.py helpers
 ##############################################################################################
-
-    def generate_docs_json_non_docs(self, values_type, name="tuq", start=0, end=0):
-        if end==0:
-            end = self.num_items
-        if values_type == 'string':
-            values = ['Engineer', 'Sales', 'Support']
-        elif values_type == 'int':
-            values = [100, 200, 300, 400, 500]
-        elif values_type == 'array':
-            values = [[10, 20], [20, 30], [30, 40]]
-        else:
-            return []
-        generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
-        return generators
 
 ##############################################################################################
 #
@@ -2145,61 +2047,18 @@ class QueryTests(BaseTestCase):
 
     def _delete_ids(self, result):
         for item in result:
-            if 'emp' in item:
-                del item['emp']['_id']
+            del item['emp']['_id'] if 'emp' in item else None
             if 'tasks' in item:
                 for task in item['tasks']:
-                    if task and '_id' in task:
-                        del task['_id']
-    
-    def generate_docs_join(self, docs_per_day, start=0):
-        generators = []
-        types = ['Engineer', 'Sales', 'Support']
-        join_yr = [2010, 2011]
-        join_mo = xrange(1, 12 + 1)
-        join_day = xrange(1, 28 + 1)
-        template = '{{ "name":"{0}", "join_yr":{1}, "join_mo":{2}, "join_day":{3},'
-        template += ' "job_title":"{4}", "tasks_ids":{5}}}'
-        for info in types:
-            for year in join_yr:
-                for month in join_mo:
-                    for day in join_day:
-                        name = ["employee-%s" % (str(day))]
-                        tasks_ids = ["test_task-%s" % day, "test_task-%s" % (day + 1)]
-                        generators.append(DocumentGenerator("query-test-%s-%s-%s-%s" % (info, year, month, day),
-                                                            template,
-                                                            name, [year], [month], [day],
-                                                            [info], [tasks_ids],
-                                                            start=start, end=docs_per_day))
-        return generators
-    
-    def generate_docs_tasks(self):
-        generators = []
-        start, end = 0, (28 + 1)
-        template = '{{ "task_name":"{0}", "project": "{1}"}}'
-        generators.append(DocumentGenerator("test_task", template,
-                                            ["test_task-%s" % i for i in xrange(0,10)],
-                                            ["CB"],
-                                            start=start, end=10))
-        generators.append(DocumentGenerator("test_task", template,
-                                            ["test_task-%s" % i for i in xrange(10,20)],
-                                            ["MB"],
-                                            start=10, end=20))
-        generators.append(DocumentGenerator("test_task", template,
-                                            ["test_task-%s" % i for i in xrange(20,end)],
-                                            ["IT"],
-                                            start=20, end=end))
-        return generators
+                    del task['_id'] if task and '_id' in task else None
 
-    def _generate_full_joined_docs_list(self, join_type=JOIN_INNER,
-                                        particular_key=None):
+    def _generate_full_joined_docs_list(self, join_type=JOIN_INNER, particular_key=None):
         joined_list = []
         all_docs_list = self.generate_full_docs_list(self.gens_load)
         if join_type.upper() == JOIN_INNER:
             for item in all_docs_list:
                 keys = item["tasks_ids"]
-                if particular_key is not None:
-                    keys=[item["tasks_ids"][particular_key]]
+                keys=[item["tasks_ids"][particular_key]] if particular_key is not None else None
                 tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
                 for tasks_item in tasks_items:
                     item_to_add = copy.deepcopy(item)
@@ -2208,8 +2067,7 @@ class QueryTests(BaseTestCase):
         elif join_type.upper() == JOIN_LEFT:
             for item in all_docs_list:
                 keys = item["tasks_ids"]
-                if particular_key is not None:
-                    keys=[item["tasks_ids"][particular_key]]
+                keys=[item["tasks_ids"][particular_key]] if particular_key is not None else None
                 tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
                 for key in keys:
                     item_to_add = copy.deepcopy(item)
@@ -2223,28 +2081,21 @@ class QueryTests(BaseTestCase):
             raise Exception("Unknown type of join")
         return joined_list
 
-    def _generate_full_nested_docs_list(self, join_type=JOIN_INNER,
-                                        particular_key=None):
+    def _generate_full_nested_docs_list(self, join_type=JOIN_INNER, particular_key=None):
         nested_list = []
         all_docs_list = self.generate_full_docs_list(self.gens_load)
         if join_type.upper() == JOIN_INNER:
             for item in all_docs_list:
                 keys = item["tasks_ids"]
-                if particular_key is not None:
-                    keys=[item["tasks_ids"][particular_key]]
+                keys=[item["tasks_ids"][particular_key]] if particular_key is not None else None
                 tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
-                if tasks_items:
-                    nested_list.append({"items_nested" : tasks_items,
-                                        "item" : item})
+                nested_list.append({"items_nested" : tasks_items, "item" : item}) if tasks_items else None
         elif join_type.upper() == JOIN_LEFT:
             for item in all_docs_list:
                 keys = item["tasks_ids"]
-                if particular_key is not None:
-                    keys=[item["tasks_ids"][particular_key]]
+                keys=[item["tasks_ids"][particular_key]] if particular_key is not None else None
                 tasks_items = self.generate_full_docs_list(self.gens_tasks, keys=keys)
-                if tasks_items:
-                    nested_list.append({"items_nested" : tasks_items,
-                                        "item" : item})
+                nested_list.append({"items_nested" : tasks_items, "item" : item}) if tasks_items else None
             tasks_doc_list = self.generate_full_docs_list(self.gens_tasks)
             for item in tasks_doc_list:
                 nested_list.append({"item" : item})
@@ -2280,8 +2131,7 @@ class QueryTests(BaseTestCase):
 
     def run_intersect_scan_explain_query(self, indexes_names, query_temp):
         for bucket in self.buckets:
-            if (query_temp.find('%s') > 0):
-                query_temp = query_temp % bucket.name
+            query_temp = query_temp % bucket.name if (query_temp.find('%s') > 0) else None
             query = 'EXPLAIN %s' % (query_temp)
             res = self.run_cbq_query(query=query)
             plan = ExplainPlanHelper(res)
@@ -2410,10 +2260,8 @@ class QueryTests(BaseTestCase):
         clause = 'UPSERT' if upsert else 'INSERT'
         for bucket in self.buckets:
             inserted = expected_item_value
-            if isinstance(expected_item_value, str):
-                inserted = '"%s"' % expected_item_value
-            if expected_item_value is None:
-                inserted = 'null'
+            inserted = '"%s"' % expected_item_value if isinstance(expected_item_value, str) else None
+            inserted = 'null' if expected_item_value is None else None
             self.query = '%s into %s (key , value) VALUES ("%s", %s)' % (clause, bucket.name, key, inserted)
             actual_result = self.run_cbq_query()
             self.assertEqual(actual_result['status'], 'success', 'Query was not run successfully')
@@ -2487,8 +2335,7 @@ class QueryTests(BaseTestCase):
 
     def _delete_ids(self, result):
         for item in result:
-            if '_id' in item:
-                del item['_id']
+            del item['_id'] if '_id' in item else None
             for bucket in self.buckets:
                 if bucket.name in item and 'id' in item[bucket.name]:
                     del item[bucket.name]['_id']
@@ -2503,13 +2350,11 @@ class QueryTests(BaseTestCase):
             fn = getattr(self, method_name)
             fn()
         except Exception as ex:
-            self.log.error("***************ERROR*************\n" + \
-                           "At least one of query threads is crashed: {0}".format(ex))
+            self.log.error("***************ERROR*************\n At least one of query threads is crashed: {0}".format(ex))
             self.thread_crashed.set()
             raise ex
         finally:
-            if not self.thread_stopped.is_set():
-                self.thread_stopped.set()
+            self.thread_stopped.set() if not self.thread_stopped.is_set() else None
 
 ##############################################################################################
 #
@@ -2521,11 +2366,9 @@ class QueryTests(BaseTestCase):
         self.assertTrue(self.buckets, 'There are no buckets! check your parameters for run')
         for bucket in self.buckets:
             index_name = 'idx_%s_%s_%s' % (bucket.name, index_field, str(uuid.uuid4())[:4])
-            query = "CREATE INDEX %s ON %s(%s) USING %s" % (index_name, bucket.name,
-                                                            ','.join(index_field.split(';')), self.indx_type)
-            # if self.gsi_type:
-            #     query += " WITH {'index_type': 'memdb'}"
+            query = "CREATE INDEX %s ON %s(%s) USING %s" % (index_name, bucket.name, ','.join(index_field.split(';')), self.indx_type)
             self.run_cbq_query(query=query)
+
             if self.indx_type.lower() == 'gsi':
                 self._wait_for_index_online(bucket, index_name)
         indexes.append(index_name)
@@ -2544,13 +2387,6 @@ class QueryTests(BaseTestCase):
 #   tuq_base64.py helpers
 ##############################################################################################
 
-    def generate_docs_base64(self, name="tuq", start=0, end=0):
-        if end==0:
-            end = self.num_items
-        values = ["Engineer", "Sales", "Support"]
-        generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
-        return generators
-    
     def _generate_full_docs_list_base64(self, gens_load):
         all_docs_list = []
         for gen_load in gens_load:
@@ -2561,11 +2397,8 @@ class QueryTests(BaseTestCase):
         return all_docs_list
 
     def _verify_results(self, actual_result, expected_result):
-        self.assertEquals(len(actual_result), len(expected_result),
-                          "Results are incorrect.Actual num %s. Expected num: %s.\n" % (
-                              len(actual_result), len(expected_result)))
-        msg = "Results are incorrect.\n Actual first and last 100:  %s.\n ... \n %s" + \
-              "Expected first and last 100: %s.\n  ... \n %s"
-        self.assertTrue(sorted(actual_result) == sorted(expected_result),
-                        msg % (actual_result[:100],actual_result[-100:],
-                               expected_result[:100],expected_result[-100:]))
+        msg = "Results are incorrect. Actual num %s. Expected num: %s.\n" % (len(actual_result), len(expected_result))
+        self.assertEquals(len(actual_result), len(expected_result), msg)
+        msg = "Results are incorrect.\n Actual first and last 100:  %s.\n ... \n %s Expected first and last 100: %s." \
+              "\n  ... \n %s" % (actual_result[:100],actual_result[-100:],expected_result[:100],expected_result[-100:])
+        self.assertTrue(sorted(actual_result) == sorted(expected_result), msg)

@@ -3,7 +3,6 @@ import math
 import re
 import uuid
 import time
-
 from tuq import QueryTests
 from tuq import ExplainPlanHelper
 from remote.remote_util import RemoteMachineShellConnection

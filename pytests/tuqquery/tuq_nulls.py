@@ -6,11 +6,7 @@ class NULLTests(QueryTests):
         self.skip_generation = True
         self.analytics = False
         super(NULLTests, self).setUp()
-        self.gens_load = self.generate_docs_nulls()
-#        for bucket in self.buckets:
-#            self.cluster.bucket_flush(self.master, bucket=bucket,
-#                                  timeout=self.wait_timeout * 5)
-#        self.load(self.gens_load)
+        self.gens_load = self.gen_docs(type='nulls')
         self.full_list = self.generate_full_docs_list_nulls(self.gens_load)
 
     def suite_setUp(self):

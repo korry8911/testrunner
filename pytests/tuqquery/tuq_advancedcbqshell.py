@@ -20,8 +20,7 @@ class AdvancedQueryTests(QueryTests):
         self.cbqpath = '%scbq -quiet -u %s -p %s' % (self.path, self.username, self.password)
 
     def tearDown(self):
-        if self._testMethodName == 'suite_tearDown':
-            self.skip_buckets_handle = False
+        self.skip_buckets_handle = False if self._testMethodName == 'suite_tearDown' else None
         super(AdvancedQueryTests, self).tearDown()
 
     def test_url(self):

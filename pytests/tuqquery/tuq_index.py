@@ -44,8 +44,7 @@ class QueriesViewsTests(QueryTests):
             self.log.info('Temp fix for create index failures MB-16888')
             self.sleep(30, 'sleep before create indexes .. ')
             try:
-                if (self.DGM == True):
-                    self.get_dgm_for_plasma(indexer_nodes=[self.server], memory_quota=400)
+                self.get_dgm_for_plasma(indexer_nodes=[self.server], memory_quota=400) if self.DGM == True else None
                 for ind in xrange(self.num_indexes):
                     view_name = "my_index%s" % ind
                     self.query = "CREATE INDEX %s ON %s(%s) USING %s" % (
@@ -54,8 +53,7 @@ class QueriesViewsTests(QueryTests):
                     self._verify_results(actual_result['results'], [])
                     created_indexes.append(view_name)
                     self._wait_for_index_online(bucket, view_name)
-                    if self.index_type == 'VIEW':
-                        self._verify_view_is_present(view_name, bucket)
+                    self._verify_view_is_present(view_name, bucket) if self.index_type == 'VIEW' else None
             finally:
                 for view_name in created_indexes:
                     self.query = "DROP INDEX %s.%s USING %s" % (bucket.name, view_name, self.index_type)

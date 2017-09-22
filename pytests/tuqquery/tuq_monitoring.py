@@ -3,13 +3,10 @@ import threading
 import json
 import uuid
 import time
-
 from newtuq import QueryTests
 from membase.api.rest_client import RestConnection
 from membase.api.exception import CBQError, ReadDocumentException
 from remote.remote_util import RemoteMachineShellConnection
-
-
 
 class QueryMonitoringTests(QueryTests):
     def setUp(self):

@@ -3,7 +3,6 @@ import threading
 import json
 import uuid
 import time
-
 from tuq_monitoring import QueryMonitoringTests
 
 class QueryProfilingTests(QueryMonitoringTests):

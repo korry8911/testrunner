@@ -13,7 +13,7 @@ class JoinTests(QueryTests):
     def setUp(self):
         try:
             super(JoinTests, self).setUp()
-            self.gens_tasks = self.generate_docs_tasks()
+            self.gens_tasks = self.gen_docs(self, type='tasks')
             self.type_join = self.input.param("type_join", JOIN_INNER)
         except Exception, ex:
             self.log.error("ERROR SETUP FAILED: %s" % str(ex))

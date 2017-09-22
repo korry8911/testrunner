@@ -4,7 +4,6 @@ from remote.remote_util import RemoteMachineShellConnection
 
 from tuqquery.tuq import QueryTests
 
-
 class OptionsTests(QueryTests):
     def setUp(self):
         super(OptionsTests, self).setUp()
