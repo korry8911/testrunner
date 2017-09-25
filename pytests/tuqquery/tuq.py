@@ -20,19 +20,6 @@ JOIN_INNER = "INNER"
 JOIN_LEFT = "LEFT"
 JOIN_RIGHT = "RIGHT"
 
-def ExplainPlanHelper(res):
-    try:
-        rv = res["results"][0]["plan"]
-    except:
-        rv = res["results"][0]
-    return rv
-
-def PreparePlanHelper(res):
-    try:
-        rv = res["results"][0]["plan"]
-    except:
-        rv = res["results"][0]["operator"]
-    return rv
 
 class QueryTests(BaseTestCase):
     def setUp(self):
@@ -61,7 +48,7 @@ class QueryTests(BaseTestCase):
         self.item_flag = self.input.param("item_flag", 4042322160)
         self.array_indexing = self.input.param("array_indexing", False)
         self.dataset = self.input.param("dataset", "default")
-        self.gens_load = self.generate_docs(self.docs_per_day)
+        self.gens_load = self.gen_docs(self.docs_per_day)
         self.skip_load = self.input.param("skip_load", False)
         self.skip_index = self.input.param("skip_index", False)
         self.plasma_dgm = self.input.param("plasma_dgm", False)
@@ -101,8 +88,9 @@ class QueryTests(BaseTestCase):
                 self.cluster.rebalance([self.master, self.cbas_node], [], [self.cbas_node], services=['cbas'])
             for bucket in self.buckets:
                 self.cluster.bucket_flush(self.master, bucket=bucket, timeout=180000)
-            self.gens_load = self.generate_docs(self.docs_per_day)
-            self.load(self.gens_load, flag=self.item_flag)
+            self.gens_load = self.gen_docs(self.docs_per_day)
+            print('xxxxxxxxxxxxxxxxxxxxxxxxxxx \n'*3)
+            self.load(self.gens_load, batch_size=1000, flag=self.item_flag)
             if self.analytics:
                 self.cluster.rebalance([self.master, self.cbas_node], [self.cbas_node], [], services=['cbas'])
         if not (hasattr(self, 'skip_generation') and self.skip_generation):
@@ -132,7 +120,8 @@ class QueryTests(BaseTestCase):
             if os != 'windows':
                 self.sleep(10, 'sleep before load')
             if not self.skip_load:
-                self.load_directory(self.gens_load) if self.flat_json else self.load(self.gens_load, flag=self.item_flag)
+                print('xxxxxxxxxxxxxxxxxxxxxxxxxxx \n'*6)
+                self.load_directory(self.gens_load) if self.flat_json else self.load(self.gens_load, batch_size=1000, flag=self.item_flag)
             if not self.input.param("skip_build_tuq", True):
                 self._build_tuq(self.master)
             self.skip_buckets_handle = True
@@ -233,11 +222,12 @@ class QueryTests(BaseTestCase):
 
         def kv_mutations(self, docs=1):
             docs = self.docs_per_day if not docs else None
-            gens_load = self.generate_docs(docs)
+            gens_load = self.gen_docs(docs)
             self.full_docs_list = self.generate_full_docs_list(gens_load)
             self.gen_results = TuqGenerators(self.log, self.full_docs_list)
+            print('xxxxxxxxxxxxxxxxxxxxxxxxxxx \n'*9)
             self.load(gens_load, buckets=self.buckets, flag=self.item_flag,
-                  verify_data=False, batch_size=self.batch_size)
+                  verify_data=False, batch_size=1000)
         if self.gsi_type != "plasma":
             return
         if not self.plasma_dgm:
@@ -279,6 +269,20 @@ class QueryTests(BaseTestCase):
 #
 #   COMMON FUNCTIONS
 ##############################################################################################
+    def ExplainPlanHelper(self, res):
+        try:
+            rv = res["results"][0]["plan"]
+        except:
+            rv = res["results"][0]
+        return rv
+
+    def PreparePlanHelper(self, res):
+        try:
+            rv = res["results"][0]["plan"]
+        except:
+            rv = res["results"][0]["operator"]
+        return rv
+
     def gen_docs(self, docs_per_day=1, type='default', values_type=None, name='tuq', start=0, end=0):
         json_generator = JsonGenerator()
         generators = []
@@ -360,8 +364,6 @@ class QueryTests(BaseTestCase):
                             '{"Number": 2, "project": "mb"}]',]
             generators.append(DocumentGenerator(name, template,
                                                 names, jira_tickets, start=index + index, end=end))
-            return self.generate_docs_nulls(name=name, start=start, end=end)
-
         return generators
 
     def wait_for_index_present(self, bucket_name, index_name, fields_set, using, timeout=60):
@@ -848,6 +850,7 @@ class QueryTests(BaseTestCase):
 #
 #   tuq_sanity.py helpers
 ##############################################################################################
+
     def expected_substr(self, a_string, start, index):
         if start is 0:
             substring = a_string[index:]
@@ -2160,7 +2163,7 @@ class QueryTests(BaseTestCase):
             query_temp = query_temp % bucket.name if (query_temp.find('%s') > 0) else None
             query = 'EXPLAIN %s' % (query_temp)
             res = self.run_cbq_query(query=query)
-            plan = ExplainPlanHelper(res)
+            plan = self.ExplainPlanHelper(res)
             self.log.info('-'*100)
             if (query.find("CREATE INDEX") < 0):
                 result = plan["~children"][0]["~children"][0] if "~children" in plan["~children"][0] \

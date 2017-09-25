@@ -10,30 +10,36 @@ from remote.remote_util import RemoteMachineShellConnection
 from membase.api.exception import CBQError, ReadDocumentException
 from membase.api.rest_client import RestConnection
 from tuq import QueryTests
+import random
+
 
 class QuerySanityTests(QueryTests):
+
     def setUp(self):
         super(QuerySanityTests, self).setUp()
+
     def suite_setUp(self):
-        super(QuerySanityTests,self).suite_setUp()
+        super(QuerySanityTests, self).suite_setUp()
+
     def tearDown(self):
         super(QuerySanityTests, self).tearDown()
+
     def suite_tearDown(self):
-        super(QuerySanityTests,self).suite_tearDown()
+        super(QuerySanityTests, self).suite_tearDown()
 
 ##############################################################################################
 #
 #   SIMPLE CHECKS
 ##############################################################################################
+
     def test_escaped_identifiers(self):
-        queries_errors = {'SELECT name FROM {0} as bucket' :
-                          ('syntax error', 3000)} #execution phase
+        queries_errors = {'SELECT name FROM {0} as bucket': ('syntax error', 3000)}
         self.negative_common_body(queries_errors)
         for bucket in self.buckets:
             self.query = 'SELECT name FROM %s as `bucket` ORDER BY name' % (bucket.name)
             actual_result = self.run_cbq_query()
 
-            expected_list = [{"name" : doc["name"]} for doc in self.full_list]
+            expected_list = [{"name": doc["name"]} for doc in self.full_list]
             expected_list_sorted = sorted(expected_list, key=lambda doc: (doc['name']))
             self._verify_results(actual_result['results'], expected_list_sorted)
 
@@ -1276,10 +1282,8 @@ class QuerySanityTests(QueryTests):
             actual_result = sorted(actual_result, key=lambda doc: (doc['job_title']))
 
             tmp_groups = set([doc['job_title'] for doc in self.full_list])
-            expected_list = [{"job_title" : group,
-                                "names" : set([x["name"] for x in self.full_list
-                                               if x["job_title"] == group])}
-                               for group in tmp_groups]
+            expected_list = [{"job_title": group, "names": set([x["name"] for x in self.full_list
+                                                                if x["job_title"] == group])} for group in tmp_groups]
             expected_result = self.sort_nested_list(expected_list)
             expected_result = sorted(expected_result, key=lambda doc: (doc['job_title']))
             self._verify_results(actual_result, expected_result)
@@ -1406,7 +1410,6 @@ class QuerySanityTests(QueryTests):
             for idx in created_indexes:
                     self.query = "DROP INDEX %s.%s USING %s" % ("default", idx, self.index_type)
                     actual_result = self.run_cbq_query()
-
 
     def test_optimized_let(self):
         self.query = 'explain select name1 from default let name1 = substr(name[0].FirstName,0,10) WHERE name1 = "employeefi"'
@@ -1583,11 +1586,11 @@ class QuerySanityTests(QueryTests):
             actual_list = self.run_cbq_query()
             actual_result = self.sort_nested_list(actual_list['results'])
             actual_result = sorted(actual_result, key=lambda doc: (doc['job_title']))
-
             tmp_groups = set([doc['job_title'] for doc in self.full_list])
             expected_result = [{"job_title" : group,
                                 "rates" : sorted([x["test_rate"] for x in self.full_list
                                                   if x["job_title"] == group] + [1.2])}
+
                                for group in tmp_groups]
             expected_result = sorted(expected_result, key=lambda doc: (doc['job_title']))
             self._verify_results(actual_result, expected_result)
@@ -2568,7 +2571,7 @@ class QuerySanityTests(QueryTests):
         for bucket in self.buckets:
             res = self.run_cbq_query()
             self.log.info(res)
-            plan = ExplainPlanHelper(res)
+            plan = self.ExplainPlanHelper(res)
             self.assertTrue(plan['~children'][2]['~child']['~children'][0]['scan']['index'] == index,
                             "wrong index used")
 
@@ -2581,8 +2584,8 @@ class QuerySanityTests(QueryTests):
     def test_explain_union(self,index):
         for bucket in self.buckets:
             res = self.run_cbq_query()
-	    plan = ExplainPlanHelper(res)
-            if("IN" in self.query):
+            plan = self.ExplainPlanHelper(res)
+            if "IN" in self.query:
                 self.assertTrue(plan["~children"][0]["~children"][0]["#operator"] == "DistinctScan",
                         "DistinctScan Operator is not used by this query")
             else:

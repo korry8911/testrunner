@@ -3,7 +3,6 @@ import copy
 import uuid
 import collections
 import json
-from tuq import ExplainPlanHelper
 from remote.remote_util import RemoteMachineShellConnection
 from tuqquery.tuq import QueryTests
 from couchbase_helper.documentgenerator import DocumentGenerator
@@ -636,7 +635,7 @@ class DMLQueryTests(QueryTests):
             self.query = 'explain delete from %s  use keys %s'  % (bucket.name, keys_to_delete)
             actual_result = self.run_cbq_query()
             self.log.info(actual_result["results"])
-	    plan = ExplainPlanHelper(actual_result)
+            plan = self.ExplainPlanHelper(actual_result)
             self.assertTrue(plan["~children"][0]["#operator"]=="KeyScan","KeysScan is not being used in delete query")
 
     def test_delete_keys_use_index_clause(self):

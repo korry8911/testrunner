@@ -4,7 +4,6 @@ import re
 import uuid
 import time
 from tuq import QueryTests
-from tuq import ExplainPlanHelper
 from remote.remote_util import RemoteMachineShellConnection
 from membase.api.rest_client import RestConnection
 from membase.api.exception import CBQError
@@ -193,7 +192,7 @@ class QuerySubqueryTests(QueryTests):
     def test_subquery_explain(self):
         self.query = 'explain SELECT q FROM {"p":[{"x":11},{"x":12}],"q":"abc","r":null}.q'
         actual_result = self.run_cbq_query()
-        plan = ExplainPlanHelper(actual_result)
+        plan = self.ExplainPlanHelper(actual_result)
         self.assertTrue(plan['~children'][0]['#operator']=='ExpressionScan')
 
 

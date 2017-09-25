@@ -998,7 +998,6 @@ class LoadDocumentsTask(GenericLoadingTask):
             self.kv_store.release_partitions(partition_keys_dic.keys())
 
 
-
 class LoadDocumentsGeneratorsTask(LoadDocumentsTask):
     def __init__(self, server, bucket, generators, kv_store, op_type, exp, flag=0, only_store_hash=True,
                  batch_size=1,pause_secs=1, timeout_secs=60):
@@ -1015,11 +1014,17 @@ class LoadDocumentsGeneratorsTask(LoadDocumentsTask):
         # only run high throughput for batch-create workloads
         # also check number of input generators isn't greater than
         # process_concurrency as too many generators become inefficient
+        print('xxxxxxxxxxxxxxxxxxxxxxxxxxx \n'*12)
         self.is_high_throughput_mode = False
         if ALLOW_HTP and not TestInputSingleton.input.param("disable_HTP", False):
             self.is_high_throughput_mode = self.op_type == "create" and \
-                self.batch_size > 1 and \
-                len(self.generators) < self.process_concurrency
+                self.batch_size > 1 and len(self.generators) < self.process_concurrency
+            print('high throughput mode: '+str(self.is_high_throughput_mode))
+            print('batch size: '+str(self.batch_size))
+            print('op type: '+str(self.op_type))
+            print('len generators: '+str(len(self.generators)))
+            print('concurrency: '+str(self.process_concurrency))
+            print('HEYEYEYEYEYEYEYEYEYEYEYEY')
 
         self.input_generators = generators
 
