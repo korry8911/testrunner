@@ -34,8 +34,7 @@ def PreparePlanHelper(res):
         rv = res["results"][0]["operator"]
     return rv
 
-class
-    QueryTests(BaseTestCase):
+class QueryTests(BaseTestCase):
     def setUp(self):
         if not self._testMethodName == 'suite_setUp' and str(self.__class__).find('upgrade_n1qlrbac') == -1:
             self.skip_buckets_handle = True
@@ -96,18 +95,23 @@ class
             self.n1ql_certs_path = "/cygdrive/c/Program\ Files/Couchbase/server/var/lib/couchbase/n1qlcerts"
         elif type.lower() == "mac":
             self.path = testconstants.MAC_COUCHBASE_BIN_PATH
-        self.gsi_type = self.input.param("gsi_type", 'plasma') if self.primary_indx_type.lower() == "gsi" else self.gsi_type = None
+        self.gsi_type = self.input.param("gsi_type", 'plasma') if self.primary_indx_type.lower() == "gsi" else None
         if self.input.param("reload_data", False):
-            self.cluster.rebalance([self.master, self.cbas_node], [], [self.cbas_node], services=['cbas']) if self.analytics else None
+            if self.analytics:
+                self.cluster.rebalance([self.master, self.cbas_node], [], [self.cbas_node], services=['cbas'])
             for bucket in self.buckets:
                 self.cluster.bucket_flush(self.master, bucket=bucket, timeout=180000)
             self.gens_load = self.generate_docs(self.docs_per_day)
             self.load(self.gens_load, flag=self.item_flag)
-            self.cluster.rebalance([self.master, self.cbas_node], [self.cbas_node], [], services=['cbas']) if self.analytics else None
-        self.full_list = self.generate_full_docs_list(self.gens_load) if not (hasattr(self, 'skip_generation') and self.skip_generation) else None
-        self.configure_gomaxprocs() if self.input.param("gomaxprocs", None) else None
+            if self.analytics:
+                self.cluster.rebalance([self.master, self.cbas_node], [self.cbas_node], [], services=['cbas'])
+        if not (hasattr(self, 'skip_generation') and self.skip_generation):
+            self.full_list = self.generate_full_docs_list(self.gens_load)
+        if self.input.param("gomaxprocs", None):
+            self.configure_gomaxprocs()
         if str(self.__class__).find('QueriesUpgradeTests') == -1 and self.primary_index_created == False:
-            self.create_primary_index_for_3_0_and_greater() if self.analytics == False else None
+            if self.analytics == False:
+                self.create_primary_index_for_3_0_and_greater()
         self.log.info('-'*100)
         self.log.info('Temp fix for MB-16888')
         if self.cluster_ops == False:
@@ -125,10 +129,12 @@ class
     def suite_setUp(self):
         try:
             os = self.shell.extract_remote_info().type.lower()
-            self.sleep(10, 'sleep before load') if os != 'windows' else None
+            if os != 'windows':
+                self.sleep(10, 'sleep before load')
             if not self.skip_load:
                 self.load_directory(self.gens_load) if self.flat_json else self.load(self.gens_load, flag=self.item_flag)
-            self._build_tuq(self.master) if not self.input.param("skip_build_tuq", True) else None
+            if not self.input.param("skip_build_tuq", True):
+                self._build_tuq(self.master)
             self.skip_buckets_handle = True
             if self.analytics:
                 self.cluster.rebalance([self.master, self.cbas_node], [self.cbas_node], [], services=['cbas'])
@@ -139,7 +145,8 @@ class
             self.tearDown()
 
     def tearDown(self):
-        self.skip_buckets_handle = False if self._testMethodName == 'suite_tearDown' else None
+        if self._testMethodName == 'suite_tearDown':
+            self.skip_buckets_handle = False
         if self.analytics == True:
             bucket_username = "cbadminbucket"
             bucket_password = "password"
@@ -493,20 +500,6 @@ class
         # trigger failure
         self.assertEqual(has_errors, False)
 
-    def ExplainPlanHelper(res):
-        try:
-            rv = res["results"][0]["plan"]
-        except:
-            rv = res["results"][0]
-        return rv
-
-    def PreparePlanHelper(res):
-        try:
-            rv = res["results"][0]["plan"]
-        except:
-            rv = res["results"][0]["operator"]
-        return rv
-
     def compare(self, test, query, expected_result_list):
         actual_result_list = []
         actual_result = self.run_cbq_query(query)
@@ -557,55 +550,78 @@ class
               % (result_no_prepare[:100],result_no_prepare[-100:], result_with_prepare[:100],result_with_prepare[-100:])
         self.assertTrue(sorted(result_no_prepare) == sorted(result_with_prepare), msg)
 
-    def run_cbq_query(self, query=None, min_output_size=10, server=None, query_params={}, is_prepared=False,
+    def run_cbq_query(self, query=None, min_output_size=10, server=None, query_params={},
+                      is_prepared=False,
                       encoded_plan=None):
-        self.log.info("-"*100)
-        query = self.query if query is None else None
+        self.log.info("-" * 100)
+        if query is None:
+            query = self.query
         if server is None:
-           server = self.master
-           server = self.tuq_client if self.input.tuq_client and "client" in self.input.tuq_client else None
+            server = self.master
+            if self.input.tuq_client and "client" in self.input.tuq_client:
+                server = self.tuq_client
         cred_params = {'creds': []}
         rest = RestConnection(server)
         username = rest.username
         password = rest.password
         cred_params['creds'].append({'user': username, 'pass': password})
         for bucket in self.buckets:
-            cred_params['creds'].append({'user': 'local:%s' % bucket.name, 'pass': bucket.saslPassword}) if bucket.saslPassword else None
+            if bucket.saslPassword:
+                cred_params['creds'].append({'user': 'local:%s' % bucket.name, 'pass': bucket.saslPassword})
         query_params.update(cred_params)
         if self.use_rest:
             query_params.update({'scan_consistency': self.scan_consistency})
-            query_params = self.query_params if hasattr(self, 'query_params') and self.query_params else None
+            if hasattr(self, 'query_params') and self.query_params:
+                query_params = self.query_params
             if self.hint_index and (query.lower().find('select') != -1):
-                from_clause = re.sub(r'let.*', '', re.sub(r'.*from', '', re.sub(r'where.*', '', query)))
-                from_clause = re.sub(r'LET.*', '', re.sub(r'.*FROM', '', re.sub(r'WHERE.*', '', from_clause)))
-                from_clause = re.sub(r'select.*', '', re.sub(r'order by.*', '', re.sub(r'group by.*', '', from_clause)))
-                from_clause = re.sub(r'SELECT.*', '', re.sub(r'ORDER BY.*', '', re.sub(r'GROUP BY.*', '', from_clause)))
+                from_clause = re.sub(r'let.*', '',
+                                     re.sub(r'.*from', '', re.sub(r'where.*', '', query)))
+                from_clause = re.sub(r'LET.*', '',
+                                     re.sub(r'.*FROM', '', re.sub(r'WHERE.*', '', from_clause)))
+                from_clause = re.sub(r'select.*', '', re.sub(r'order by.*', '',
+                                                             re.sub(r'group by.*', '',
+                                                                    from_clause)))
+                from_clause = re.sub(r'SELECT.*', '', re.sub(r'ORDER BY.*', '',
+                                                             re.sub(r'GROUP BY.*', '',
+                                                                    from_clause)))
                 hint = ' USE INDEX (%s using %s) ' % (self.hint_index, self.index_type)
                 query = query.replace(from_clause, from_clause + hint)
 
             if self.analytics:
                 query = query + ";"
                 for bucket in self.buckets:
-                    query = query.replace(bucket.name,bucket.name+"_shadow")
+                    query = query.replace(bucket.name, bucket.name + "_shadow")
                 self.log.info('RUN QUERY %s' % query)
-                result = RestConnection(self.cbas_node).execute_statement_on_cbas(query, "immediate")
+                result = RestConnection(self.cbas_node).execute_statement_on_cbas(query,
+                                                                                  "immediate")
                 result = json.loads(result)
-            else :
-                result = rest.query_tool(query, self.n1ql_port, query_params=query_params, is_prepared=is_prepared,
-                                         named_prepare=self.named_prepare, encoded_plan=encoded_plan, servers=self.servers)
+            else:
+                result = rest.query_tool(query, self.n1ql_port, query_params=query_params,
+                                         is_prepared=is_prepared,named_prepare=self.named_prepare,
+                                         encoded_plan=encoded_plan, servers=self.servers)
         else:
             if self.version == "git_repo":
-                output = self.shell.execute_commands_inside("$GOPATH/src/github.com/couchbase/query/shell/cbq/cbq ","","","","","","")
+                output = self.shell.execute_commands_inside(
+                    "$GOPATH/src/github.com/couchbase/query/" + \
+                    "shell/cbq/cbq ", "", "", "", "", "", "")
             else:
-                if not(self.isprepared):
+                if not (self.isprepared):
                     query = query.replace('"', '\\"')
                     query = query.replace('`', '\\`')
-                    cmd =  "%scbq  -engine=http://%s:%s/ -q -u %s -p %s" % (self.path,server.ip,server.port,username,password)
-                    output = self.shell.execute_commands_inside(cmd,query,"","","","","")
-                    output1 = '{'+str(output) if not(output[0] == '{') else output1 = output
+
+                    cmd = "%scbq  -engine=http://%s:%s/ -q -u %s -p %s" % (
+                    self.path, server.ip, server.port, username, password)
+
+                    output = self.shell.execute_commands_inside(cmd, query, "", "", "", "", "")
+                    if not (output[0] == '{'):
+                        output1 = '{' + str(output)
+                    else:
+                        output1 = output
                     result = json.loads(output1)
-        raise CBQError(result, server.ip) if isinstance(result, str) or 'errors' in result else None
-        self.log.info("TOTAL ELAPSED TIME: %s" % result["metrics"]["elapsedTime"]) if 'metrics' in result else None
+        if isinstance(result, str) or 'errors' in result:
+            raise CBQError(result, server.ip)
+        if 'metrics' in result:
+            self.log.info("TOTAL ELAPSED TIME: %s" % result["metrics"]["elapsedTime"])
         return result
 
     def build_url(self, version):
@@ -649,7 +665,7 @@ class
 
     def _start_command_line_query(self, server, options='', user=None, password=None):
         out = ''
-        auth_row = '%s:%s@' % (user, password) if user and password else auth_row = None
+        auth_row = '%s:%s@' % (user, password) if user and password else None
         os = self.shell.extract_remote_info().type.lower()
         if self.flat_json:
             if os == 'windows':
@@ -663,7 +679,7 @@ class
             out = self.shell.execute_command(cmd)
             self.log.info(out)
         elif self.version == "git_repo":
-            gopath = testconstants.LINUX_GOPATH if os != 'windows' else gopath = testconstants.WINDOWS_GOPATH
+            gopath = testconstants.LINUX_GOPATH if os != 'windows' else testconstants.WINDOWS_GOPATH
             gopath = self.input.tuq_client["gopath"] if self.input.tuq_client and "gopath" in self.input.tuq_client else None
             if os == 'windows':
                 cmd = "cd %s/src/github.com/couchbase/query/server/cbq-engine; " % (gopath) +\
@@ -892,9 +908,10 @@ class
         self.create_users(users=[{'id': 'john_select2', 'name': 'johnSelect2', 'password':'password'}])
         self.create_users(users=[{'id': 'john_rep', 'name': 'johnRep', 'password':'password'}])
         self.create_users(users=[{'id': 'john_bucket_admin', 'name': 'johnBucketAdmin', 'password':'password'}])
-        for bucket in self.buckets:
-            for item in [("query_insert",'john_insert'), ("query_update",'john_update'), ("query_delete",'john_delete'),
+        items = [("query_insert",'john_insert'), ("query_update",'john_update'), ("query_delete",'john_delete'),
                          ("query_select",'john_select'), ("bucket_admin",'john_bucket_admin'), ("query_select",'john_select2')]
+        for bucket in self.buckets:
+            for item in items:
                 self.query = "GRANT {0} on {2} to {1}".format(item[0],item[1],bucket.name)
                 self.n1ql_helper.run_cbq_query(query = self.query, server = self.n1ql_node)
 
@@ -1771,7 +1788,8 @@ class
             filename = "/cygdrive/c/tmp/test.txt"
 
         filedata = ""
-        main_command = main_command + " -s=\"" + query + '"' if not (query == "") else None
+        if not (query == ""):
+            main_command = main_command + " -s=\"" + query + '"'
         elif (shell.remote and not (queries == "")):
             sftp = shell._ssh_client.open_sftp()
             filein = sftp.open(filename, 'w')
@@ -1795,6 +1813,7 @@ class
         newdata = newdata.replace("user", bucket1)
         newdata = newdata.replace("pass", password)
         newdata = newdata.replace("bucket1", bucket1)
+
         newdata = newdata.replace("user1", bucket1)
         newdata = newdata.replace("pass1", password)
         newdata = newdata.replace("bucket2", bucket2)
@@ -1821,7 +1840,7 @@ class
                 else:
                     main_command = main_command + " -f=" + filename
 
-        self.log.info("running command on {0}: {1}".format(self.master.ip, main_command))
+        log.info("running command on {0}: {1}".format(self.master.ip, main_command))
         output = ""
         if shell.remote:
             stdin, stdout, stderro = shell._ssh_client.exec_command(main_command)
@@ -1834,7 +1853,8 @@ class
                     if "Inputwasnotastatement" in output:
                         output = "status:FAIL"
                         break
-                    output = "status:timeout" if "timeout" in output else None
+                    if "timeout" in output:
+                        output = "status:timeout"
                 else:
                     count += 1
             stdin.close()
@@ -2047,10 +2067,16 @@ class
 
     def _delete_ids(self, result):
         for item in result:
-            del item['emp']['_id'] if 'emp' in item else None
+            if 'emp' in item:
+                del item['emp']['_id']
+            else:
+                None
             if 'tasks' in item:
                 for task in item['tasks']:
-                    del task['_id'] if task and '_id' in task else None
+                    if task and '_id' in task:
+                        del task['_id']
+                    else:
+                        None
 
     def _generate_full_joined_docs_list(self, join_type=JOIN_INNER, particular_key=None):
         joined_list = []
@@ -2335,7 +2361,10 @@ class
 
     def _delete_ids(self, result):
         for item in result:
-            del item['_id'] if '_id' in item else None
+            if '_id' in item:
+                del item['_id']
+            else:
+                None
             for bucket in self.buckets:
                 if bucket.name in item and 'id' in item[bucket.name]:
                     del item[bucket.name]['_id']
