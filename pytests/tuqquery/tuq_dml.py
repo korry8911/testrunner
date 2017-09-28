@@ -8,8 +8,6 @@ from tuqquery.tuq import QueryTests
 from couchbase_helper.documentgenerator import DocumentGenerator
 
 
-TIMEOUT_DELETED = 300
-
 class DMLQueryTests(QueryTests):
     def setUp(self):
         super(DMLQueryTests, self).setUp()

@@ -1,25 +1,17 @@
 import logging
-import threading
-import logger
 import json
-import uuid
 import copy
-import math
 import re
 import os
 
 import testconstants
-import datetime
 import time
-from datetime import date
 from couchbase_helper.tuq_generators import TuqGenerators
 from couchbase_helper.tuq_generators import JsonGenerator
 from remote.remote_util import RemoteMachineShellConnection
 from basetestcase import BaseTestCase
-from couchbase_helper.documentgenerator import DocumentGenerator
 from membase.api.exception import CBQError, ReadDocumentException
 from membase.api.rest_client import RestConnection
-from memcached.helper.data_helper import MemcachedClientHelper
 
 class QueryTests(BaseTestCase):
     def setUp(self):
@@ -123,20 +115,12 @@ class QueryTests(BaseTestCase):
                 self.shell.execute_command("killall tuqtng")
                 self.shell.disconnect()
 
+##############################################################################################
+#
+#  Setup Helpers
+##############################################################################################
 
     def setup_analytics(self):
-        #data = ""
-        # for bucket in self.buckets:
-        #         data += 'disconnect bucket {0} ;'.format(bucket.name) + "\n"
-        #         data += 'connect bucket {0};'.format(bucket.name) + "\n"
-        # filename = "file.txt"
-        # f = open(filename,'w')
-        # f.write(data)
-        # f.close()
-        # url = 'http://{0}:8095/analytics/service'.format(self.master.ip)
-        # cmd = 'curl -s --data pretty=true --data-urlencode "statement@file.txt" ' + url
-        # os.system(cmd)
-        # os.remove(filename)
         data = 'use Default;'
         bucket_username = "cbadminbucket"
         bucket_password = "password"
@@ -256,11 +240,6 @@ class QueryTests(BaseTestCase):
                 self.n1ql_port = server.n1ql_port
             if self.input.tuq_client and "client" in self.input.tuq_client:
                 server = self.tuq_client
-        if self.n1ql_port == None or self.n1ql_port == '':
-            self.n1ql_port = self.input.param("n1ql_port", 8093)
-            if not self.n1ql_port:
-                self.log.info(" n1ql_port is not defined, processing will not proceed further")
-                raise Exception("n1ql_port is not defined, processing will not proceed further")
         query_params = {}
         cred_params = {'creds': []}
         rest = RestConnection(server)
@@ -292,7 +271,6 @@ class QueryTests(BaseTestCase):
                                                             "shell/cbq/cbq ","","","","","","")
             else:
                 os = self.shell.extract_remote_info().type.lower()
-                #if (query.find("VALUES") > 0):
                 if not(self.isprepared):
                     query = query.replace('"', '\\"')
                     query = query.replace('`', '\\`')
@@ -305,7 +283,6 @@ class QueryTests(BaseTestCase):
                 else:
                     output1 = output
                 result = json.loads(output1)
-            #result = self._parse_query_output(output)
         if isinstance(result, str) or 'errors' in result:
             raise CBQError(result, server.ip)
         self.log.info("TOTAL ELAPSED TIME: %s" % result["metrics"]["elapsedTime"])
@@ -520,8 +497,6 @@ class QueryTests(BaseTestCase):
                     if (res['metrics']['resultCount'] == 0):
                         self.query = "CREATE PRIMARY INDEX ON %s USING %s" % (bucket.name, self.primary_indx_type)
                         self.log.info("Creating primary index for %s ..." % bucket.name)
-                    # if self.gsi_type:
-                    #     self.query += " WITH {'index_type': 'memdb'}"
                         try:
                             self.run_cbq_query()
                             self.primary_index_created = True
@@ -529,14 +504,6 @@ class QueryTests(BaseTestCase):
                                 self._wait_for_index_online(bucket, '#primary')
                         except Exception, ex:
                             self.log.info(str(ex))
-                if self.monitoring:
-                        self.query = "select * from system:active_requests"
-                        result = self.run_cbq_query()
-
-                        self.assertTrue(result['metrics']['resultCount'] == 1)
-                        self.query = "select * from system:completed_requests"
-                        time.sleep(20)
-                        self.run_cbq_query()
 
     def _wait_for_index_online(self, bucket, index_name, timeout=6000):
         end_time = time.time() + timeout

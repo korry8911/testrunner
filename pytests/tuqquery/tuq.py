@@ -7,13 +7,19 @@ import re
 import logging
 import testconstants
 import time
+import traceback
+import collections
+from subprocess import Popen, PIPE
 from remote.remote_util import RemoteMachineShellConnection
 from couchbase_helper.tuq_generators import JsonGenerator
 from basetestcase import BaseTestCase
 from membase.api.exception import CBQError, ReadDocumentException
+from couchbase_helper.documentgenerator import DocumentGenerator
 from membase.api.rest_client import RestConnection
+from security.rbac_base import RbacBase
 # from sdk_client import SDKClient
 from couchbase_helper.tuq_generators import TuqGenerators
+# from xdcr.upgradeXDCR import UpgradeTests
 from couchbase_helper.documentgenerator import JSONNonDocGenerator
 
 JOIN_INNER = "INNER"
@@ -46,34 +52,35 @@ class QueryTests(BaseTestCase):
         self.buckets = RestConnection(self.master).get_buckets()
         self.docs_per_day = self.input.param("doc-per-day", 49)
         self.item_flag = self.input.param("item_flag", 4042322160)
-        self.array_indexing = self.input.param("array_indexing", False)
-        self.dataset = self.input.param("dataset", "default")
-        self.gens_load = self.gen_docs(self.docs_per_day)
-        self.skip_load = self.input.param("skip_load", False)
-        self.skip_index = self.input.param("skip_index", False)
-        self.plasma_dgm = self.input.param("plasma_dgm", False)
         self.n1ql_port = self.input.param("n1ql_port", 8093)
-        #self.analytics = self.input.param("analytics",False)
+        self.analytics = self.input.param("analytics", False)
+        self.dataset = self.input.param("dataset", "default")
         self.primary_indx_type = self.input.param("primary_indx_type", 'GSI')
-        self.primary_indx_drop = self.input.param("primary_indx_drop", False)
         self.index_type = self.input.param("index_type", 'GSI')
-        self.DGM = self.input.param("DGM",False)
-        self.scan_consistency = self.input.param("scan_consistency", 'REQUEST_PLUS')
-        self.covering_index = self.input.param("covering_index", False)
-        self.named_prepare = self.input.param("named_prepare", None)
+        self.skip_primary_index = self.input.param("skip_primary_index", False)
+        self.primary_indx_drop = self.input.param("primary_indx_drop", False)
         self.monitoring = self.input.param("monitoring", False)
-        self.encoded_prepare = self.input.param("encoded_prepare", False)
-        self.cluster_ops = self.input.param("cluster_ops",False)
         self.isprepared = False
-        self.server = self.master
-        self.rest = RestConnection(self.server)
-        self.username=self.rest.username
-        self.password=self.rest.password
-        self.cover = self.input.param("cover", False)
+        self.named_prepare = self.input.param("named_prepare", None)
+        self.encoded_prepare = self.input.param("encoded_prepare", False)
+        self.scan_consistency = self.input.param("scan_consistency", 'REQUEST_PLUS')
         shell = RemoteMachineShellConnection(self.master)
         type = shell.extract_remote_info().distribution_type
         shell.disconnect()
         self.path = testconstants.LINUX_COUCHBASE_BIN_PATH
+        self.array_indexing = self.input.param("array_indexing", False)
+        self.gens_load = self.gen_docs(self.docs_per_day)
+        self.skip_load = self.input.param("skip_load", False)
+        self.skip_index = self.input.param("skip_index", False)
+        self.plasma_dgm = self.input.param("plasma_dgm", False)
+        self.DGM = self.input.param("DGM",False)
+        self.covering_index = self.input.param("covering_index", False)
+        self.cluster_ops = self.input.param("cluster_ops",False)
+        self.server = self.master
+        self.rest = RestConnection(self.server)
+        self.username= self.rest.username
+        self.password= self.rest.password
+        self.cover = self.input.param("cover", False)
         self.curl_path = "curl"
         self.n1ql_certs_path = "/opt/couchbase/var/lib/couchbase/n1qlcerts"
         if type.lower() == 'windows':
@@ -97,6 +104,7 @@ class QueryTests(BaseTestCase):
             self.full_list = self.generate_full_docs_list(self.gens_load)
         if self.input.param("gomaxprocs", None):
             self.configure_gomaxprocs()
+        self.gen_results = TuqGenerators(self.log, self.generate_full_docs_list(self.gens_load))
         if str(self.__class__).find('QueriesUpgradeTests') == -1 and self.primary_index_created == False:
             if self.analytics == False:
                 self.create_primary_index_for_3_0_and_greater()
@@ -589,11 +597,13 @@ class QueryTests(BaseTestCase):
                 hint = ' USE INDEX (%s using %s) ' % (self.hint_index, self.index_type)
                 query = query.replace(from_clause, from_clause + hint)
 
+            if not is_prepared:
+                self.log.info('RUN QUERY %s' % query)
+
             if self.analytics:
                 query = query + ";"
                 for bucket in self.buckets:
                     query = query.replace(bucket.name, bucket.name + "_shadow")
-                self.log.info('RUN QUERY %s' % query)
                 result = RestConnection(self.cbas_node).execute_statement_on_cbas(query,
                                                                                   "immediate")
                 result = json.loads(result)
@@ -644,8 +654,10 @@ class QueryTests(BaseTestCase):
             else:
                 goroot = testconstants.WINDOWS_GOROOT
                 gopath = testconstants.WINDOWS_GOPATH
-            gopath = self.input.tuq_client["gopath"] if self.input.tuq_client and "gopath" in self.input.tuq_client else None
-            goroot = self.input.tuq_client["goroot"] if self.input.tuq_client and "goroot" in self.input.tuq_client else None
+            if self.input.tuq_client and "gopath" in self.input.tuq_client:
+                gopath = self.input.tuq_client["gopath"]
+            if self.input.tuq_client and "goroot" in self.input.tuq_client:
+                goroot = self.input.tuq_client["goroot"]
             cmd = "rm -rf {0}/src/github.com".format(gopath)
             self.shell.execute_command(cmd)
             cmd= 'export GOROOT={0} && export GOPATH={1} &&'.format(goroot, gopath) +\
@@ -681,8 +693,12 @@ class QueryTests(BaseTestCase):
             out = self.shell.execute_command(cmd)
             self.log.info(out)
         elif self.version == "git_repo":
-            gopath = testconstants.LINUX_GOPATH if os != 'windows' else testconstants.WINDOWS_GOPATH
-            gopath = self.input.tuq_client["gopath"] if self.input.tuq_client and "gopath" in self.input.tuq_client else None
+            if os != 'windows':
+                gopath = testconstants.LINUX_GOPATH
+            else:
+                gopath = testconstants.WINDOWS_GOPATH
+            if self.input.tuq_client and "gopath" in self.input.tuq_client:
+                gopath = self.input.tuq_client["gopath"]
             if os == 'windows':
                 cmd = "cd %s/src/github.com/couchbase/query/server/cbq-engine; " % (gopath) +\
                 "./cbq-engine.exe -datastore http://%s%s:%s/ %s >/dev/null 2>&1 &" %(('', auth_row)[auth_row is not None], server.ip, server.port, options)
@@ -723,10 +739,14 @@ class QueryTests(BaseTestCase):
 
     #This method has no usages anywhere
     def _parse_query_output(self, output):
-        output = output[output.find("cbq>") + 4:].strip() if output.find("cbq>") == 0 else None
-        output = output[output.find("tuq_client>") + 11:].strip() if output.find("tuq_client>") == 0 else None
-        output = output[:output.find("cbq>")].strip() if output.find("cbq>") != -1 else None
-        output = output[:output.find("tuq_client>")].strip() if output.find("tuq_client>") != -1 else None
+        if output.find("cbq>") == 0:
+            output = output[output.find("cbq>") + 4:].strip()
+        if output.find("tuq_client>") == 0:
+            output = output[output.find("tuq_client>") + 11:].strip()
+        if output.find("cbq>") != -1:
+            output = output[:output.find("cbq>")].strip()
+        if output.find("tuq_client>") != -1:
+            output = output[:output.find("tuq_client>")].strip()
         return json.loads(output)
 
     def generate_docs(self, docs_per_day, start=0):
@@ -753,9 +773,11 @@ class QueryTests(BaseTestCase):
     def check_missing_and_extra(self, actual, expected):
         missing, extra = [], []
         for item in actual:
-            extra.append(item) if not (item in expected) else None
+            if not (item in expected):
+                 extra.append(item)
         for item in expected:
-            missing.append(item) if not (item in actual) else None
+            if not (item in actual):
+                missing.append(item)
         return missing, extra
 
     def sort_nested_list(self, result, key=None):
@@ -804,8 +826,11 @@ class QueryTests(BaseTestCase):
             finally:
                shell.disconnect()
 
+    #Going to implement this stupidly for now, basically two different flags are used in tuq and newtuq,
+    #dont want to go through every single conf and change it to one unified flag, so going to put in
+    # both flags logic for now, will fix later
     def create_primary_index_for_3_0_and_greater(self):
-        if self.skip_index:
+        if self.skip_index or not self.skip_primary_index:
             self.log.info("Not creating index")
             return
         if self.flat_json:
@@ -821,16 +846,17 @@ class QueryTests(BaseTestCase):
                     self.sleep(3, 'Sleep for some time after index drop')
                 self.query = "select * from system:indexes where name='#primary' and keyspace_id = %s" % bucket.name
                 res = self.run_cbq_query(self.query)
-                if (res['metrics']['resultCount'] == 0):
-                    self.query = "CREATE PRIMARY INDEX ON %s USING %s" % (bucket.name, self.primary_indx_type)
-                    self.log.info("Creating primary index for %s ..." % bucket.name)
-                    try:
-                        self.run_cbq_query()
-                        self.primary_index_created= True
-                        self._wait_for_index_online(bucket, '#primary') if self.primary_indx_type.lower() == 'gsi' else None
-
-                    except Exception, ex:
-                        self.log.info(str(ex))
+                if not self.skip_primary_index:
+                    if (res['metrics']['resultCount'] == 0):
+                        self.query = "CREATE PRIMARY INDEX ON %s USING %s" % (bucket.name, self.primary_indx_type)
+                        self.log.info("Creating primary index for %s ..." % bucket.name)
+                        try:
+                            self.run_cbq_query()
+                            self.primary_index_created= True
+                            if self.primary_indx_type.lower() == 'gsi':
+                                self._wait_for_index_online(bucket, '#primary')
+                        except Exception, ex:
+                            self.log.info(str(ex))
 
     def _wait_for_index_online(self, bucket, index_name, timeout=6000):
         end_time = time.time() + timeout
@@ -846,6 +872,91 @@ class QueryTests(BaseTestCase):
                         return
             self.sleep(5, 'index is pending or not in the list. sleeping... (%s)' % [item['indexes'] for item in res['results']])
         raise Exception('index %s is not online. last response is %s' % (index_name, res))
+
+##############################################################################################
+#
+#   newtuq COMMON FUNCTIONS
+##############################################################################################
+
+    def run_query_from_template(self, query_template):
+        self.query = self.gen_results.generate_query(query_template)
+        expected_result = self.gen_results.generate_expected_result()
+        actual_result = self.run_cbq_query()
+        return actual_result, expected_result
+
+    def run_query_with_subquery_select_from_template(self, query_template):
+        subquery_template = re.sub(r'.*\$subquery\(', '', query_template)
+        subquery_template = subquery_template[:subquery_template.rfind(')')]
+        keys_num = int(re.sub(r'.*KEYS \$', '', subquery_template).replace('KEYS $', ''))
+        subquery_full_list = self.generate_full_docs_list(gens_load=self.gens_load,keys=self._get_keys(keys_num))
+        subquery_template = re.sub(r'USE KEYS.*', '', subquery_template)
+        sub_results = TuqGenerators(self.log, subquery_full_list)
+        self.query = sub_results.generate_query(subquery_template)
+        expected_sub = sub_results.generate_expected_result()
+        alias = re.sub(r',.*', '', re.sub(r'.*\$subquery\(.*\)', '', query_template))
+        alias = re.sub(r'.*as','', re.sub(r'FROM.*', '', alias)).strip()
+        if not alias:
+            alias = '$1'
+        for item in self.gen_results.full_set:
+            item[alias] = expected_sub[0]
+        query_template = re.sub(r',.*\$subquery\(.*\).*%s' % alias, ',%s' % alias, query_template)
+        self.query = self.gen_results.generate_query(query_template)
+        expected_result = self.gen_results.generate_expected_result()
+        actual_result = self.run_cbq_query()
+        return actual_result, expected_result
+
+    def run_query_with_subquery_from_template(self, query_template):
+        subquery_template = re.sub(r'.*\$subquery\(', '', query_template)
+        subquery_template = subquery_template[:subquery_template.rfind(')')]
+        subquery_full_list = self.generate_full_docs_list(gens_load=self.gens_load)
+        sub_results = TuqGenerators(self.log, subquery_full_list)
+        self.query = sub_results.generate_query(subquery_template)
+        expected_sub = sub_results.generate_expected_result()
+        alias = re.sub(r',.*', '', re.sub(r'.*\$subquery\(.*\)', '', query_template))
+        alias = re.sub(r'.*as ', '', alias).strip()
+        self.gen_results = TuqGenerators(self.log, expected_sub)
+        query_template = re.sub(r'\$subquery\(.*\).*%s' % alias, ' %s' % alias, query_template)
+        self.query = self.gen_results.generate_query(query_template)
+        expected_result = self.gen_results.generate_expected_result()
+        actual_result = self.run_cbq_query()
+        return actual_result, expected_result
+
+    def _get_keys(self, key_num):
+        keys = []
+        for gen in self.gens_load:
+            gen_copy = copy.deepcopy(gen)
+            for i in xrange(gen_copy.end):
+                key, _ = gen_copy.next()
+                keys.append(key)
+                if len(keys) == key_num:
+                    return keys
+        return keys
+
+    def run_active_requests(self, e, t):
+        while not e.isSet():
+            logging.debug('wait_for_event_timeout starting')
+            event_is_set = e.wait(t)
+            logging.debug('event set: %s', event_is_set)
+            if event_is_set:
+                result = self.run_cbq_query("select * from system:active_requests")
+                self.assertTrue(result['metrics']['resultCount'] == 1)
+                requestId = result['requestID']
+                result = self.run_cbq_query(
+                    'delete from system:active_requests where requestId  =  "%s"' % requestId)
+                time.sleep(20)
+                result = self.run_cbq_query(
+                    'select * from system:active_requests  where requestId  =  "%s"' % requestId)
+                self.assertTrue(result['metrics']['resultCount'] == 0)
+                result = self.run_cbq_query("select * from system:completed_requests")
+                requestId = result['requestID']
+                result = self.run_cbq_query(
+                    'delete from system:completed_requests where requestId  =  "%s"' % requestId)
+                time.sleep(10)
+                result = self.run_cbq_query(
+                    'select * from system:completed_requests where requestId  =  "%s"' % requestId)
+                self.assertTrue(result['metrics']['resultCount'] == 0)
+
+
 ##############################################################################################
 #
 #   tuq_sanity.py helpers
@@ -1212,6 +1323,7 @@ class QueryTests(BaseTestCase):
                             format(bucket.name, 'john_select'))
 
             # change permission of john_select2 and verify its able to execute the correct query.
+            del_name = "employee-14"
             cmd = "{5} -u {0}:{1} http://{2}:8093/query/service -d 'statement=DELETE FROM {3} a WHERE name = '{4}''". \
                 format('john_select2', 'password', self.master.ip, bucket.name, del_name,self.curl_path)
             self.change_and_update_permission('with_bucket', "query_delete", 'john_select2',
@@ -2261,6 +2373,7 @@ class QueryTests(BaseTestCase):
         return keys, values
 
     def _keys_are_deleted(self, keys):
+        TIMEOUT_DELETED = 300
         end_time = time.time() + TIMEOUT_DELETED
         #Checks for keys deleted ...
         while time.time() < end_time:

@@ -1,26 +1,6 @@
 import logging
 import threading
-import logger
-import json
-import uuid
-import copy
-import math
-import re
-import os
-
-import testconstants
-import datetime
-import time
-from datetime import date
-from couchbase_helper.tuq_generators import TuqGenerators
-from couchbase_helper.tuq_generators import JsonGenerator
-from remote.remote_util import RemoteMachineShellConnection
-from basetestcase import BaseTestCase
-from couchbase_helper.documentgenerator import DocumentGenerator
-from membase.api.exception import CBQError, ReadDocumentException
-from membase.api.rest_client import RestConnection
-from memcached.helper.data_helper import MemcachedClientHelper
-from newtuq import QueryTests
+from tuq import QueryTests
 
 class QueryNewTuqTests(QueryTests):
 
