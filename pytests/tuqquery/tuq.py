@@ -19,7 +19,7 @@ from membase.api.rest_client import RestConnection
 from security.rbac_base import RbacBase
 # from sdk_client import SDKClient
 from couchbase_helper.tuq_generators import TuqGenerators
-# from xdcr.upgradeXDCR import UpgradeTests
+#from xdcr.upgradeXDCR import UpgradeTests
 from couchbase_helper.documentgenerator import JSONNonDocGenerator
 
 JOIN_INNER = "INNER"
@@ -524,18 +524,30 @@ class QueryTests(BaseTestCase):
         self.assertEqual(actual_result['results'], expected_result['results'])
 
     def negative_common_body(self, queries_errors={}):
-        self.fail("No queries to run!") if not queries_errors else None
+        if not queries_errors:
+            self.fail("No queries to run!")
+        check_code = False
         for bucket in self.buckets:
-            for query, value in queries_errors.iteritems():
-                error, code = value
+            for query_template, error_arg in queries_errors.iteritems():
+                if isinstance(error_arg,str):
+                    error = error_arg
+                else:
+                    error, code = error_arg
+                    check_code = True
                 try:
+                    query = self.gen_results.generate_query(query_template)
                     actual_result = self.run_cbq_query(query.format(bucket.name))
                 except CBQError as ex:
                     self.log.error(ex)
-                    self.assertTrue(str(ex).find(error) != -1, "Error is incorrect.Actual %s.\n Expected: %s.\n" %(str(ex).split(':')[-1], error))
-                    self.assertTrue(str(ex).find(str(code)) != -1, "Error code is incorrect.Actual %s.\n Expected: %s.\n" %(str(ex), code))
+                    self.log.error(error)
+                    self.assertTrue(str(ex).find(error) != -1,
+                                    "Error is incorrect.Actual %s.\n Expected: %s.\n" %(
+                                                                str(ex).split(':')[-1], error))
+                    if check_code:
+                        self.assertTrue(str(ex).find(str(code)) != -1,
+                                        "Error code is incorrect.Actual %s.\n Expected: %s.\n" % (str(ex), code))
                 else:
-                    self.fail("There was no errors. Error expected: %s" % error)
+                    self.fail("There were no errors. Error expected: %s" % error)
 
     def prepared_common_body(self,server=None):
         self.isprepared = True
@@ -830,12 +842,12 @@ class QueryTests(BaseTestCase):
     #dont want to go through every single conf and change it to one unified flag, so going to put in
     # both flags logic for now, will fix later
     def create_primary_index_for_3_0_and_greater(self):
-        if self.skip_index or not self.skip_primary_index:
+        if self.skip_index or self.skip_primary_index:
             self.log.info("Not creating index")
             return
         if self.flat_json:
-                    return
-        self.sleep(30, 'Sleep for some time prior to index creation')
+            return
+        self.sleep(15, 'Sleep for some time prior to index creation')
         rest = RestConnection(self.master)
         versions = rest.get_nodes_versions()
         if versions[0].startswith("4") or versions[0].startswith("3") or versions[0].startswith("5"):
@@ -846,17 +858,16 @@ class QueryTests(BaseTestCase):
                     self.sleep(3, 'Sleep for some time after index drop')
                 self.query = "select * from system:indexes where name='#primary' and keyspace_id = %s" % bucket.name
                 res = self.run_cbq_query(self.query)
-                if not self.skip_primary_index:
-                    if (res['metrics']['resultCount'] == 0):
-                        self.query = "CREATE PRIMARY INDEX ON %s USING %s" % (bucket.name, self.primary_indx_type)
-                        self.log.info("Creating primary index for %s ..." % bucket.name)
-                        try:
-                            self.run_cbq_query()
-                            self.primary_index_created= True
-                            if self.primary_indx_type.lower() == 'gsi':
-                                self._wait_for_index_online(bucket, '#primary')
-                        except Exception, ex:
-                            self.log.info(str(ex))
+                if (res['metrics']['resultCount'] == 0):
+                    self.query = "CREATE PRIMARY INDEX ON %s USING %s" % (bucket.name, self.primary_indx_type)
+                    self.log.info("Creating primary index for %s ..." % bucket.name)
+                    try:
+                        self.run_cbq_query()
+                        self.primary_index_created= True
+                        if self.primary_indx_type.lower() == 'gsi':
+                            self._wait_for_index_online(bucket, '#primary')
+                    except Exception, ex:
+                        self.log.info(str(ex))
 
     def _wait_for_index_online(self, bucket, index_name, timeout=6000):
         end_time = time.time() + timeout
@@ -2078,6 +2089,7 @@ class QueryTests(BaseTestCase):
 ##############################################################################################
 #
 #   tuq_xdcr.py helpers
+#   I think these helpers should go back into tuq_xdcr, importing upgradetests has some slight drawbacks for tuq
 ##############################################################################################
 
     def _override_clusters_structure(self):
