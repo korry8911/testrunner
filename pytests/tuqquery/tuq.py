@@ -297,13 +297,24 @@ class QueryTests(BaseTestCase):
         if type == 'default':
             if self.array_indexing:
                 generators = json_generator.generate_docs_employee_array(docs_per_day, start)
-            else:
+            elif self.dataset == 'default':
                 generators = json_generator.generate_docs_employee(docs_per_day, start)
-
+            elif self.dataset == 'sabre':
+                generators = json_generator.generate_docs_sabre(docs_per_day, start)
+            elif self.dataset == 'employee':
+                generators = json_generator.generate_docs_employee_data(docs_per_day=docs_per_day, start=start)
+            elif self.dataset == 'simple':
+                generators = json_generator.generate_docs_employee_simple_data(docs_per_day=docs_per_day, start=start)
+            elif self.dataset == 'sales':
+                generators = json_generator.generate_docs_employee_sales_data(docs_per_day=docs_per_day, start=start)
+            elif self.dataset == 'bigdata':
+                generators = json_generator.generate_docs_bigdata(end=(1000*docs_per_day), start=start, value_size=self.value_size)
+            else:
+                self.fail("There is no dataset %s, please enter a valid one" % self.dataset)
         elif type == 'base64':
             end = self.num_items if end==0 else None
             values = ["Engineer", "Sales", "Support"]
-            generators = [JSONNonDocGenerator(name, values, start=start,end=end)]
+            generators = [JSONNonDocGenerator(name, values, start=start, end=end)]
 
         elif type == 'tasks':
             start, end = 0, (28 + 1)
@@ -418,23 +429,41 @@ class QueryTests(BaseTestCase):
 
             # INDEX STAGE
             query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
-                                frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                i['indexes']['state'], i['indexes']['using'])
-                               for i in query_response['results']]
-            desired_indexes = [(index[0], index[1],
-                                frozenset([field.split()[0] for field in index[2]]), index[3], index[4])
-                               for index in test_dict[test_name]['indexes']]
-            desired_index_set = frozenset(desired_indexes)
-            current_index_set = frozenset(current_indexes)
+            #current_indexes = [
+            #    (i['indexes']['name'], i['indexes']['keyspace_id'], frozenset([key.strip('`') for key in i['indexes']['index_key']]),
+            #     i['indexes']['state'], i['indexes']['using']) for i in query_response['results']]
+
+            current_indexes = [{'name': i['indexes']['name'],
+                                'bucket': i['indexes']['keyspace_id'],
+                                'fields': frozenset([key.strip('`') for key in i['indexes']['index_key']]),
+                                'state': i['indexes']['state'],
+                                'using': i['indexes']['using'],
+                                'where': i['indexes'].get('condition', '')} for i in query_response['results']]
+
+            #desired_indexes = [(index[0], index[1],
+            #                    frozenset([field.split()[0] for field in index[2]]), index[3], index[4])
+            #                   for index in test_dict[test_name]['indexes']]
+
+            desired_indexes = [{'name': index['name'],
+                                'bucket': index['bucket'],
+                                'fields': frozenset([field.split()[0] for field in index[2]]),
+                                'state': index['state'],
+                                'using': index['using'],
+                                'where': index.get('where', '')} for index in test_dict[test_name]['indexes']]
+
+            #desired_index_set = frozenset(desired_indexes)
+            desired_index_set = frozenset([frozenset(index_dict.items()) for index_dict in desired_indexes])
+
+            #current_index_set = frozenset(current_indexes)
+            current_index_set = frozenset([frozenset(index_dict.items()) for index_dict in current_indexes])
 
             # drop all unwanted indexes
             if desired_index_set != current_index_set:
                 self.log.info("dropping extra indexes")
                 for current_index in current_indexes:
-                    if current_index not in desired_index_set:
+                    if frozenset(current_index.items()) not in desired_index_set:
                         # drop index
-                        name = current_index[0]
+                        name = current_index['name']
                         keyspace = current_index[1]
                         using = current_index[4]
                         self.log.info("dropping index: %s %s %s" % (keyspace, name, using))
@@ -443,11 +472,21 @@ class QueryTests(BaseTestCase):
                         self.log.info("dropped index: %s %s %s" % (keyspace, name, using))
 
             query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
-                                frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                i['indexes']['state'], i['indexes']['using'])
-                               for i in query_response['results']]
-            current_index_set = frozenset(current_indexes)
+
+            #current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
+            #                    frozenset([key.strip('`') for key in i['indexes']['index_key']]),
+            #                    i['indexes']['state'], i['indexes']['using'])
+            #                   for i in query_response['results']]
+
+            current_indexes = [{'name': i['indexes']['name'],
+                                'bucket': i['indexes']['keyspace_id'],
+                                'fields': frozenset([key.strip('`') for key in i['indexes']['index_key']]),
+                                'state': i['indexes']['state'],
+                                'using': i['indexes']['using'],
+                                'where': i['indexes'].get('condition', '')} for i in query_response['results']]
+
+            #current_index_set = frozenset(current_indexes)
+            current_index_set = frozenset([frozenset(index_dict.items()) for index_dict in current_indexes])
 
             if desired_index_set != current_index_set:
                 self.log.info("creating required indexes")

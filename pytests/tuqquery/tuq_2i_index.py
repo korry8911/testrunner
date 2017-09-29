@@ -347,6 +347,7 @@ class QueriesIndexTests(QueryTests):
                 '''
                self.query = 'CREATE INDEX idx ON {0}( join_yr ) WHERE join_mo = 12'.format(bucket.name)
                self.run_cbq_query()
+
                self.query = 'explain select count(*) from {0} where join_yr>2010 and join_mo = 12'.format(bucket.name)
                actual_result = self.run_cbq_query()
                plan = self.ExplainPlanHelper(actual_result)
@@ -378,6 +379,7 @@ class QueriesIndexTests(QueryTests):
                self.run_cbq_query()
                self.query = 'CREATE INDEX idx ON {0}( name,join_day,join_yr )'.format(bucket.name)
                self.run_cbq_query()
+
                self.query = 'explain select count(1) from {0} where name = '.format(bucket.name)+\
                '"employee-23" and join_day = 23'
                actual_result = self.run_cbq_query()
