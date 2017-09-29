@@ -33,13 +33,13 @@ class AscDescTests(QueryTests):
                         'query-testemployee10153.1877827-5', 'query-testemployee10194.855617-0']
 
         # index defs
-        primary_index = ("#primary", "default", [], "online", index_type)
+        #primary_index = ("#primary", "default", [], "online", index_type)
         primary_index = {'name': '#primary',
                          'bucket': 'default',
                          'fields': [],
                          'state': 'online',
                          'using': index_type}
-        index_1 = ("idx", "default", ["join_yr ASC", " _id DESC"], "online", index_type)
+        #index_1 = ("idx", "default", ["join_yr ASC", " _id DESC"], "online", index_type)
         index_1 = {'name': 'idx',
                    'bucket': 'default',
                    'fields': ["join_yr ASC", " _id DESC"],

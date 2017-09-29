@@ -616,9 +616,9 @@ class JsonGenerator:
         department = self._shuffle(['Developer', 'Support','HR','Tester','Manager'],isShuffle)
         sport = ['Badminton','Cricket','Football','Basketball','American Football','ski']
         dance = ['classical','bollywood','salsa','hip hop','contemporary','bhangra']
-        join_yr = self._shuffle([2010, 2011,2012,2013,2014,2015,2016],isShuffle)
-        join_mo = self._shuffle(xrange(1, 12 + 1),isShuffle)
-        join_day = self._shuffle(xrange(1, 28 + 1),isShuffle)
+        join_yr = self._shuffle([2010, 2011, 2012, 2013, 2014, 2015, 2016], isShuffle)
+        join_mo = self._shuffle(xrange(1, 12 + 1), isShuffle)
+        join_day = self._shuffle(xrange(1, 28 + 1), isShuffle)
         engineer = ["Query","Search","Indexing","Storage","Android","IOS"]
         marketing = ["East","West","North","South","International"]
         cities = ['Mumbai','Delhi','New York','San Francisco']
@@ -679,8 +679,8 @@ class JsonGenerator:
                         "MSQ", "MIA", "LON", "DUB"]
         dests = [all_airports[i] for i in indexes]
         join_yr = self._shuffle(xrange(2010, 2010 + years), isShuffle)
-        join_mo = self._shuffle(xrange(1, 12 + 1),isShuffle)
-        join_day = self._shuffle(xrange(1, 28 + 1),isShuffle)
+        join_mo = self._shuffle(xrange(1, 12 + 1), isShuffle)
+        join_day = self._shuffle(xrange(1, 28 + 1), isShuffle)
         template = '{{ "Amount":{0}, "CurrencyCode":"{1}",'
         template += ' "TotalTax":{{"DecimalPlaces" : {2}, "Amount" : {3}, "CurrencyCode" : "{4}"}},'
         template += ' "Tax":{5}, "FareBasisCode":{6}, "PassengerTypeQuantity":{7}, "TicketType":"{8}",'
@@ -798,7 +798,7 @@ class JsonGenerator:
                                                [[dest, dest]], start=start, end=docs_per_day))
         return generators
 
-    def generate_docs_sales(self, key_prefix = "sales_dataset", test_data_type = True, start=0, docs_per_day=None, isShuffle = False):
+    def generate_docs_sales(self, key_prefix="sales_dataset", test_data_type=True, start=0, docs_per_day=None, isShuffle = False):
         generators = []
         if end is None:
             end = self.docs_per_day
@@ -813,9 +813,9 @@ class JsonGenerator:
             template += ' "client_name" : "{8}", "client_reclaims_rate" : {9}}}'
             sales = self._shuffle([200000, 400000, 600000, 800000],isShuffle)
 
-            is_support = self._shuffle(['true', 'false'],isShuffle)
-            is_priority = self._shuffle(['true', 'false'],isShuffle)
-            contact = "contact_"+str(random.random()*10000000)
+            is_support = self._shuffle(['true', 'false'], isShuffle)
+            is_priority = self._shuffle(['true', 'false'], isShuffle)
+            contact = "contact_" + str(random.random()*10000000)
             name ="name_"+str(random.random()*100000)
             rate = [x * 0.1 for x in range(0, 10)]
             for year in join_yr:
@@ -834,7 +834,7 @@ class JsonGenerator:
                                                   start=start, end=end))
         return generators
 
-    def generate_docs_bigdata(self, key_prefix = "big_dataset", value_size = 1024, start=0, docs_per_day=1, end=None):
+    def generate_docs_bigdata(self, key_prefix="big_dataset", value_size=1024, start=0, docs_per_day=1, end=None):
         if end is None:
             end = docs_per_day
         age = range(start, end)
@@ -954,7 +954,7 @@ class JsonGenerator:
                                                 [confirm_question_values], start=start, end=1))
         return generators
 
-    def generate_docs_employee_data(self, key_prefix ="employee_dataset", start=0, docs_per_day = 1, isShuffle = False):
+    def generate_docs_employee_data(self, key_prefix="employee_dataset", start=0, years=2, docs_per_day=1, isShuffle=False, end=None):
         generators = []
         count = 1
         sys_admin_info = {"title" : "System Administrator and heliport manager",
@@ -968,10 +968,10 @@ class JsonGenerator:
                                "type" : "arch"}
         data_sets = self._shuffle([sys_admin_info, ui_eng_info, senior_arch_info],isShuffle)
         if end is None:
-            end = self.docs_per_day
-        join_yr = self._shuffle(range(2008, 2008 + self.years),isShuffle)
-        join_mo = self._shuffle(range(1, self.months + 1),isShuffle)
-        join_day = self._shuffle(range(1, self.days + 1),isShuffle)
+            end = docs_per_day
+        join_yr = self._shuffle(xrange(2008, 2008 + years), isShuffle)
+        join_mo = self._shuffle(xrange(1, 12 + 1), isShuffle)
+        join_day = self._shuffle(xrange(1, 28 + 1), isShuffle)
         name = ["employee-%s-%s" % (key_prefix, str(i)) for i in xrange(start, end)]
         email = ["%s-mail@couchbase.com" % str(i) for i in xrange(start, end)]
         template = '{{ "name":"{0}", "join_yr":{1}, "join_mo":{2}, "join_day":{3},'

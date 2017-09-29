@@ -60,6 +60,7 @@ class QueryTests(BaseTestCase):
         self.skip_primary_index = self.input.param("skip_primary_index", False)
         self.primary_indx_drop = self.input.param("primary_indx_drop", False)
         self.monitoring = self.input.param("monitoring", False)
+        self.value_size = self.input.param("value_size", 0)
         self.isprepared = False
         self.named_prepare = self.input.param("named_prepare", None)
         self.encoded_prepare = self.input.param("encoded_prepare", False)
@@ -298,16 +299,22 @@ class QueryTests(BaseTestCase):
             if self.array_indexing:
                 generators = json_generator.generate_docs_employee_array(docs_per_day, start)
             elif self.dataset == 'default':
+                #not working
                 generators = json_generator.generate_docs_employee(docs_per_day, start)
             elif self.dataset == 'sabre':
+                #works
                 generators = json_generator.generate_docs_sabre(docs_per_day, start)
             elif self.dataset == 'employee':
+                #not working
                 generators = json_generator.generate_docs_employee_data(docs_per_day=docs_per_day, start=start)
             elif self.dataset == 'simple':
+                #not working
                 generators = json_generator.generate_docs_employee_simple_data(docs_per_day=docs_per_day, start=start)
             elif self.dataset == 'sales':
+                #not working
                 generators = json_generator.generate_docs_employee_sales_data(docs_per_day=docs_per_day, start=start)
             elif self.dataset == 'bigdata':
+                #not working
                 generators = json_generator.generate_docs_bigdata(end=(1000*docs_per_day), start=start, value_size=self.value_size)
             else:
                 self.fail("There is no dataset %s, please enter a valid one" % self.dataset)
@@ -429,9 +436,6 @@ class QueryTests(BaseTestCase):
 
             # INDEX STAGE
             query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            #current_indexes = [
-            #    (i['indexes']['name'], i['indexes']['keyspace_id'], frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-            #     i['indexes']['state'], i['indexes']['using']) for i in query_response['results']]
 
             current_indexes = [{'name': i['indexes']['name'],
                                 'bucket': i['indexes']['keyspace_id'],
@@ -440,21 +444,14 @@ class QueryTests(BaseTestCase):
                                 'using': i['indexes']['using'],
                                 'where': i['indexes'].get('condition', '')} for i in query_response['results']]
 
-            #desired_indexes = [(index[0], index[1],
-            #                    frozenset([field.split()[0] for field in index[2]]), index[3], index[4])
-            #                   for index in test_dict[test_name]['indexes']]
-
             desired_indexes = [{'name': index['name'],
                                 'bucket': index['bucket'],
-                                'fields': frozenset([field.split()[0] for field in index[2]]),
+                                'fields': frozenset([field.split()[0] for field in index['fields']]),
                                 'state': index['state'],
                                 'using': index['using'],
                                 'where': index.get('where', '')} for index in test_dict[test_name]['indexes']]
 
-            #desired_index_set = frozenset(desired_indexes)
             desired_index_set = frozenset([frozenset(index_dict.items()) for index_dict in desired_indexes])
-
-            #current_index_set = frozenset(current_indexes)
             current_index_set = frozenset([frozenset(index_dict.items()) for index_dict in current_indexes])
 
             # drop all unwanted indexes
@@ -464,19 +461,14 @@ class QueryTests(BaseTestCase):
                     if frozenset(current_index.items()) not in desired_index_set:
                         # drop index
                         name = current_index['name']
-                        keyspace = current_index[1]
-                        using = current_index[4]
+                        keyspace = current_index['bucket']
+                        using = current_index['using']
                         self.log.info("dropping index: %s %s %s" % (keyspace, name, using))
                         self.run_cbq_query("DROP INDEX %s.%s USING %s" % (keyspace, name, using))
                         self.wait_for_index_drop(keyspace, name)
                         self.log.info("dropped index: %s %s %s" % (keyspace, name, using))
 
             query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-
-            #current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
-            #                    frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-            #                    i['indexes']['state'], i['indexes']['using'])
-            #                   for i in query_response['results']]
 
             current_indexes = [{'name': i['indexes']['name'],
                                 'bucket': i['indexes']['keyspace_id'],
@@ -485,18 +477,17 @@ class QueryTests(BaseTestCase):
                                 'using': i['indexes']['using'],
                                 'where': i['indexes'].get('condition', '')} for i in query_response['results']]
 
-            #current_index_set = frozenset(current_indexes)
             current_index_set = frozenset([frozenset(index_dict.items()) for index_dict in current_indexes])
 
             if desired_index_set != current_index_set:
                 self.log.info("creating required indexes")
-                for desired_index in desired_index_set:
-                    if desired_index not in current_index_set:
-                        name = desired_index[0]
-                        keyspace = desired_index[1]
-                        fields = desired_index[2]
+                for desired_index in desired_indexes:
+                    if frozenset(desired_index.items()) not in current_index_set:
+                        name = desired_index['name']
+                        keyspace = desired_index['bucket']
+                        fields = desired_index['fields']
                         joined_fields = ', '.join(fields)
-                        using = desired_index[4]
+                        using = desired_index['using']
                         self.log.info("creating index: %s %s %s" % (keyspace, name, using))
                         self.run_cbq_query("CREATE INDEX %s ON %s(%s) USING %s" % (name, keyspace, joined_fields, using))
                         self.wait_for_index_present(keyspace, name, fields, using)
@@ -799,13 +790,6 @@ class QueryTests(BaseTestCase):
         if output.find("tuq_client>") != -1:
             output = output[:output.find("tuq_client>")].strip()
         return json.loads(output)
-
-    def generate_docs(self, docs_per_day, start=0):
-        json_generator = JsonGenerator()
-        if self.array_indexing:
-            return json_generator.generate_docs_employee_array( docs_per_day, start)
-        else:
-            return json_generator.generate_docs_employee( docs_per_day, start)
 
     def _verify_results(self, actual_result, expected_result):
         if self.max_verify is not None:
