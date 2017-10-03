@@ -394,14 +394,19 @@ class QueryTests(BaseTestCase):
 
     def wait_for_index_present(self, bucket_name, index_name, fields_set, using, timeout=60):
         end_time = time.time() + timeout
-        desired_index = (index_name, bucket_name, frozenset([field.split()[0] for field in fields_set]),
-                         "online", using)
+        desired_index = (index_name,
+                         bucket_name,
+                         frozenset([field.split()[0].replace('`', '').replace('(', '').replace(')', '') for field in fields_set]),
+                         "online",
+                         using)
         while time.time() < end_time:
             query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'],
-                                frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                i['indexes']['state'], i['indexes']['using'])
-                               for i in query_response['results']]
+            current_indexes = [(i['indexes']['name'],
+                                i['indexes']['keyspace_id'],
+                                frozenset([key.replace('`', '').replace('(', '').replace(')', '')
+                                           for key in i['indexes']['index_key']]),
+                                i['indexes']['state'],
+                                i['indexes']['using']) for i in query_response['results']]
             if desired_index in current_indexes:
                 return
             else:
@@ -415,8 +420,8 @@ class QueryTests(BaseTestCase):
         drop_index = (index_name, bucket_name)
         while time.time() < end_time:
             query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-            current_indexes = [(i['indexes']['name'], i['indexes']['keyspace_id'])
-                               for i in query_response['results']]
+            current_indexes = [(i['indexes']['name'],
+                                i['indexes']['keyspace_id']) for i in query_response['results']]
             if drop_index not in current_indexes:
                 return
             else:
@@ -425,118 +430,154 @@ class QueryTests(BaseTestCase):
         msg = 'index %s is online. last response is %s' % (drop_index, [index for index in current_indexes])
         raise Exception(msg)
 
+    def get_parsed_indexes(self):
+        query_response = self.run_cbq_query("SELECT * FROM system:indexes")
+        current_indexes = [{'name': i['indexes']['name'],
+                            'bucket': i['indexes']['keyspace_id'],
+                            'fields': frozenset([key.replace('`', '').replace('(', '').replace(')', '')
+                                                 for key in i['indexes']['index_key']]),
+                            'state': i['indexes']['state'],
+                            'using': i['indexes']['using'],
+                            'where': i['indexes'].get('condition', ''),
+                            'is_primary': i['indexes'].get('is_primary', False)} for i in query_response['results']]
+        return current_indexes
+
+    def parse_desired_indexes(self, index_list):
+        desired_indexes = [{'name': index['name'],
+                            'bucket': index['bucket'],
+                            'fields': frozenset([field.split()[0] for field in index['fields']]),
+                            'state': index['state'],
+                            'using': index['using'],
+                            'where': index.get('where', ''),
+                            'is_primary': index.get('is_primary', False)} for index in index_list]
+        return desired_indexes
+
+    def make_hashable_index_set(self, parsed_indexes):
+        return frozenset([frozenset(index_dict.items()) for index_dict in parsed_indexes])
+
+    def drop_undesired_indexes(self, desired_index_set, current_index_set, current_indexes):
+        if desired_index_set != current_index_set:
+            for current_index in current_indexes:
+                if frozenset(current_index.items()) not in desired_index_set:
+                    # drop index
+                    name = current_index['name']
+                    keyspace = current_index['bucket']
+                    using = current_index['using']
+                    is_primary = current_index['is_primary']
+                    self.log.info("dropping index: %s %s %s" % (keyspace, name, using))
+                    if is_primary:
+                        self.run_cbq_query("DROP PRIMARY INDEX on %s USING %s" % (keyspace, using))
+                    else:
+                        self.run_cbq_query("DROP INDEX %s.%s USING %s" % (keyspace, name, using))
+                    self.wait_for_index_drop(keyspace, name)
+
+    def create_desired_indexes(self, desired_index_set, current_index_set, desired_indexes):
+        if desired_index_set != current_index_set:
+            for desired_index in desired_indexes:
+                if frozenset(desired_index.items()) not in current_index_set:
+                    name = desired_index['name']
+                    keyspace = desired_index['bucket']
+                    fields = desired_index['fields']
+                    joined_fields = ', '.join(fields)
+                    using = desired_index['using']
+                    is_primary = desired_index['is_primary']
+                    where = desired_index['where']
+                    self.log.info("creating index: %s %s %s" % (keyspace, name, using))
+                    if is_primary:
+                        self.run_cbq_query("CREATE PRIMARY INDEX ON %s USING %s" % (keyspace, using))
+                    else:
+                        if where != '':
+                            self.run_cbq_query("CREATE INDEX %s ON %s(%s) WHERE %s  USING %s" % (name, keyspace, joined_fields, where, using))
+                        else:
+                            self.run_cbq_query("CREATE INDEX %s ON %s(%s) USING %s" % (name, keyspace, joined_fields, using))
+                    self.wait_for_index_present(keyspace, name, fields, using)
+
     def query_runner(self, test_dict):
         test_results = dict()
-        for test_name in test_dict.keys():
-            pre_queries = test_dict[test_name]['pre_queries']
-            queries = test_dict[test_name]['queries']
-            post_queries = test_dict[test_name]['post_queries']
-            asserts = test_dict[test_name]['asserts']
-            cleanups = test_dict[test_name]['cleanups']
+        restore_indexes = self.get_parsed_indexes()
+        for test_name in sorted(test_dict.keys()):
+            try:
+                index_list = test_dict[test_name]['indexes']
+                pre_queries = test_dict[test_name]['pre_queries']
+                queries = test_dict[test_name]['queries']
+                post_queries = test_dict[test_name]['post_queries']
+                asserts = test_dict[test_name]['asserts']
+                cleanups = test_dict[test_name]['cleanups']
 
-            # INDEX STAGE
-            query_response = self.run_cbq_query("SELECT * FROM system:indexes")
+                # INDEX STAGE
+                current_indexes = self.get_parsed_indexes()
+                desired_indexes = self.parse_desired_indexes(index_list)
+                desired_index_set = self.make_hashable_index_set(desired_indexes)
+                current_index_set = self.make_hashable_index_set(current_indexes)
 
-            current_indexes = [{'name': i['indexes']['name'],
-                                'bucket': i['indexes']['keyspace_id'],
-                                'fields': frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                'state': i['indexes']['state'],
-                                'using': i['indexes']['using'],
-                                'where': i['indexes'].get('condition', '')} for i in query_response['results']]
+                # drop all undesired indexes
+                self.drop_undesired_indexes(desired_index_set, current_index_set, current_indexes)
 
-            desired_indexes = [{'name': index['name'],
-                                'bucket': index['bucket'],
-                                'fields': frozenset([field.split()[0] for field in index['fields']]),
-                                'state': index['state'],
-                                'using': index['using'],
-                                'where': index.get('where', '')} for index in test_dict[test_name]['indexes']]
+                # create desired indexes
+                current_indexes = self.get_parsed_indexes()
+                current_index_set = self.make_hashable_index_set(current_indexes)
+                self.create_desired_indexes(desired_index_set, current_index_set, desired_indexes)
 
-            desired_index_set = frozenset([frozenset(index_dict.items()) for index_dict in desired_indexes])
-            current_index_set = frozenset([frozenset(index_dict.items()) for index_dict in current_indexes])
+                res_dict = dict()
+                res_dict['pre_q_res'] = []
+                res_dict['q_res'] = []
+                res_dict['post_q_res'] = []
+                res_dict['errors'] = []
+                res_dict['cleanup_res'] = []
 
-            # drop all unwanted indexes
-            if desired_index_set != current_index_set:
-                self.log.info("dropping extra indexes")
-                for current_index in current_indexes:
-                    if frozenset(current_index.items()) not in desired_index_set:
-                        # drop index
-                        name = current_index['name']
-                        keyspace = current_index['bucket']
-                        using = current_index['using']
-                        self.log.info("dropping index: %s %s %s" % (keyspace, name, using))
-                        self.run_cbq_query("DROP INDEX %s.%s USING %s" % (keyspace, name, using))
-                        self.wait_for_index_drop(keyspace, name)
-                        self.log.info("dropped index: %s %s %s" % (keyspace, name, using))
-
-            query_response = self.run_cbq_query("SELECT * FROM system:indexes")
-
-            current_indexes = [{'name': i['indexes']['name'],
-                                'bucket': i['indexes']['keyspace_id'],
-                                'fields': frozenset([key.strip('`') for key in i['indexes']['index_key']]),
-                                'state': i['indexes']['state'],
-                                'using': i['indexes']['using'],
-                                'where': i['indexes'].get('condition', '')} for i in query_response['results']]
-
-            current_index_set = frozenset([frozenset(index_dict.items()) for index_dict in current_indexes])
-
-            if desired_index_set != current_index_set:
-                self.log.info("creating required indexes")
-                for desired_index in desired_indexes:
-                    if frozenset(desired_index.items()) not in current_index_set:
-                        name = desired_index['name']
-                        keyspace = desired_index['bucket']
-                        fields = desired_index['fields']
-                        joined_fields = ', '.join(fields)
-                        using = desired_index['using']
-                        self.log.info("creating index: %s %s %s" % (keyspace, name, using))
-                        self.run_cbq_query("CREATE INDEX %s ON %s(%s) USING %s" % (name, keyspace, joined_fields, using))
-                        self.wait_for_index_present(keyspace, name, fields, using)
-                        self.log.info("created index: %s %s %s" % (keyspace, name, using))
-            # at this point current indexes should = desired indexes
-            res_dict = dict()
-
-            # PRE_QUERIES STAGE
-            res_dict['pre_q_res'] = []
-            for func in pre_queries:
-                res = func(res_dict)
-                res_dict['pre_q_res'].append(res)
-            # QUERIES STAGE
-            res_dict['q_res'] = []
-            for query in queries:
-                self.log.info('Running query: ' + query)
-                res = self.run_cbq_query(query)
-                res_dict['q_res'].append(res)
-            # POST_QUERIES STAGE
-            res_dict['post_q_res'] = []
-            for func in post_queries:
-                res = func(res_dict)
-                res_dict['post_q_res'].append(res)
-            # ASSERT STAGE
-            res_dict['errors'] = []
-            for func in asserts:
-                try:
+                # PRE_QUERIES STAGE
+                self.log.info('Running Pre-query Stage:'+str(pre_queries))
+                for func in pre_queries:
+                    res = func(res_dict)
+                    res_dict['pre_q_res'].append(res)
+                # QUERIES STAGE
+                self.log.info('Running Query Stage:'+str(queries))
+                for query in queries:
+                    res = self.run_cbq_query(query)
+                    res_dict['q_res'].append(res)
+                # POST_QUERIES STAGE
+                self.log.info('Running Post-query Stage:'+str(post_queries))
+                for func in post_queries:
+                    res = func(res_dict)
+                    res_dict['post_q_res'].append(res)
+                # ASSERT STAGE
+                self.log.info('Running Assert Stage:'+str(asserts))
+                for func in asserts:
                     res = func(res_dict)
                     self.log.info('Pass: ' + test_name)
-                except Exception as e:
-                    self.log.info('Fail: ' + test_name)
-                    res_dict['errors'].append((test_name, e, traceback.format_exc(), res_dict))
-            # CLEANUP STAGE
-            res_dict['cleanup_res'] = []
-            for func in cleanups:
-                res = func(res_dict)
-                res_dict['cleanup_res'].append(res)
+                # CLEANUP STAGE
+                self.log.info('Running Cleanup Stage:'+str(cleanups))
+                for func in cleanups:
+                    res = func(res_dict)
+                    res_dict['cleanup_res'].append(res)
+            except Exception as e:
+                self.log.info('Fail: ' + test_name)
+                res_dict['errors'].append((test_name, e, traceback.format_exc(), res_dict))
 
             test_results[test_name] = res_dict
 
+        ## reset indexes
+        self.log.info('Queries completed, restoring previous indexes')
+        current_indexes = self.get_parsed_indexes()
+        restore_index_set = self.make_hashable_index_set(restore_indexes)
+        current_index_set = self.make_hashable_index_set(current_indexes)
+        self.drop_undesired_indexes(restore_index_set, current_index_set, current_indexes)
+        current_indexes = self.get_parsed_indexes()
+        current_index_set = self.make_hashable_index_set(current_indexes)
+        self.create_desired_indexes(restore_index_set, current_index_set, restore_indexes)
+
+        ## print errors
         errors = [error for key in test_results.keys() for error in test_results[key]['errors']]
         has_errors = False
         if errors != []:
             has_errors = True
-            self.log.info('There are %s errors: ' % (len(errors)))
+            error_string = '\n ************************ There are %s errors: ************************ \n \n' % (len(errors))
             for error in errors:
-                self.log.error('Error in query: ' + str(error[0]))
-                self.log.error(str(error[1]))
-                self.log.error(str(error[2]))
+                error_string += '************************ Error in query: ' + str(error[0]) + ' ************************ \n'
+                error_string += str(error[2]) + '\n'
+            error_string += '************************ End of Errors ************************ \n'
+            self.log.error(error_string)
+
         # trigger failure
         self.assertEqual(has_errors, False)
 

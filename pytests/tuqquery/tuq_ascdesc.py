@@ -38,13 +38,15 @@ class AscDescTests(QueryTests):
                          'bucket': 'default',
                          'fields': [],
                          'state': 'online',
-                         'using': index_type}
+                         'using': index_type,
+                         'is_primary': True}
         #index_1 = ("idx", "default", ["join_yr ASC", " _id DESC"], "online", index_type)
         index_1 = {'name': 'idx',
                    'bucket': 'default',
                    'fields': ["join_yr ASC", " _id DESC"],
                    'state': 'online',
-                   'using': index_type}
+                   'using': index_type,
+                   'is_primary': False}
 
         # pre query defs
 
